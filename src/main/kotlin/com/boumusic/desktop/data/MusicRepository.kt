@@ -15,40 +15,106 @@ class MusicRepository {
     private val userHome: String = System.getProperty("user.home") ?: "."
     private val configDir = File(userHome, ".boumusic").apply { if (!exists()) mkdirs() }
     private val configFile = File(configDir, "config.json")
+    private val cacheFile = File(configDir, "library_cache.json")
 
-    var defaultMusicDir: File = File(userHome, "Music").let {
-        if (it.exists()) it else File(userHome, "Música").let { es -> if (es.exists()) es else File(userHome) }
+    private val candidateFolders: List<File> by lazy {
+        listOf(
+            File(userHome, "Music"),
+            File(userHome, "Música"),
+            File(userHome, "OneDrive" + File.separator + "Music"),
+            File(userHome, "Downloads"),
+            File(userHome, "Descargas")
+        ).filter { it.exists() && it.isDirectory }
+    }
+
+    var defaultMusicDir: File = candidateFolders.firstOrNull() ?: File(userHome, "Music").apply { mkdirs() }
+
+    fun loadCachedSongs(): List<Song> {
+        if (!cacheFile.exists()) return emptyList()
+        val songs = mutableListOf<Song>()
+        try {
+            val arr = JSONArray(cacheFile.readText(Charsets.UTF_8))
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val path = o.optString("path", "")
+                if (path.isNotBlank() && File(path).exists()) {
+                    songs.add(
+                        Song(
+                            id = o.optLong("id", path.hashCode().toLong()),
+                            title = o.optString("title", File(path).nameWithoutExtension),
+                            artist = o.optString("artist", "Artista"),
+                            album = o.optString("album", "Álbum"),
+                            duration = o.optLong("duration", 0L),
+                            path = path,
+                            isRemote = false
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return songs
+    }
+
+    fun saveCachedSongs(songs: List<Song>) {
+        try {
+            val arr = JSONArray()
+            for (s in songs) {
+                if (s.isRemote) continue
+                val o = JSONObject()
+                o.put("id", s.id)
+                o.put("title", s.title)
+                o.put("artist", s.artist)
+                o.put("album", s.album)
+                o.put("duration", s.duration)
+                o.put("path", s.path)
+                arr.put(o)
+            }
+            cacheFile.writeText(arr.toString(), Charsets.UTF_8)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun scanLocalSongs(folder: File = defaultMusicDir): List<Song> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<Song>()
-        if (!folder.exists() || !folder.isDirectory) return@withContext songs
+        val foldersToScan = if (folder == defaultMusicDir && candidateFolders.isNotEmpty()) candidateFolders else listOf(folder)
 
         val audioExtensions = setOf("mp3", "flac", "wav", "ogg", "m4a", "aac", "opus")
+        val excludedDirNames = setOf("appdata", "node_modules", "temp", ".gradle", ".git", "windows", "program files")
 
-        folder.walkTopDown()
-            .maxDepth(6)
-            .filter { it.isFile && it.extension.lowercase() in audioExtensions }
-            .forEach { file ->
-                val baseName = file.nameWithoutExtension
-                val parts = baseName.split(" - ", limit = 2)
-                val artist = if (parts.size == 2) parts[0].trim() else file.parentFile?.name ?: "Artista"
-                val title = if (parts.size == 2) parts[1].trim() else baseName
+        for (dir in foldersToScan) {
+            if (!dir.exists() || !dir.isDirectory) continue
+            dir.walkTopDown()
+                .onEnter { f ->
+                    !f.name.startsWith(".") && f.name.lowercase() !in excludedDirNames
+                }
+                .maxDepth(4)
+                .filter { it.isFile && it.extension.lowercase() in audioExtensions }
+                .forEach { file ->
+                    val baseName = file.nameWithoutExtension
+                    val parts = baseName.split(" - ", limit = 2)
+                    val artist = if (parts.size == 2) parts[0].trim() else file.parentFile?.name ?: "Artista"
+                    val title = if (parts.size == 2) parts[1].trim() else baseName
 
-                songs.add(
-                    Song(
-                        id = file.absolutePath.hashCode().toLong(),
-                        title = title,
-                        artist = artist,
-                        album = file.parentFile?.name ?: "Álbum",
-                        duration = 0L,
-                        path = file.absolutePath,
-                        isRemote = false
+                    songs.add(
+                        Song(
+                            id = file.absolutePath.hashCode().toLong(),
+                            title = title,
+                            artist = artist,
+                            album = file.parentFile?.name ?: "Álbum",
+                            duration = 0L,
+                            path = file.absolutePath,
+                            isRemote = false
+                        )
                     )
-                )
-            }
+                }
+        }
 
-        songs.sortedBy { it.title.lowercase() }
+        val result = songs.distinctBy { it.path }.sortedBy { it.title.lowercase() }
+        saveCachedSongs(result)
+        result
     }
 
     suspend fun loadSavedServers(): List<FtpConfig> = withContext(Dispatchers.IO) {

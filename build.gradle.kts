@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.boumusic.desktop"
-version = "0.1.0-beta"
+version = "0.1.1-beta"
 
 repositories {
     mavenCentral()
@@ -49,6 +49,7 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.boumusic.desktop.MainKt"
+        jvmArgs("-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1")
         nativeDistributions {
             targetFormats(
                 TargetFormat.Msi,

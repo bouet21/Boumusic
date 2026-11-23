@@ -9,6 +9,8 @@ import com.boumusic.desktop.model.FtpItem
 import com.boumusic.desktop.model.Playlist
 import com.boumusic.desktop.model.Song
 import com.boumusic.desktop.model.SongSortOrder
+import com.boumusic.desktop.sync.NetworkDevice
+import com.boumusic.desktop.sync.NetworkSyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -336,12 +338,52 @@ class DesktopMusicViewModel(
         }
     }
 
+    // SINCRONIZACIÓN AUTOMÁTICA EN RED LOCAL (UDP / HTTP)
+    val syncManager = NetworkSyncManager(
+        deviceName = "PC (" + (System.getenv("COMPUTERNAME") ?: System.getProperty("user.name") ?: "Desktop") + ")",
+        serverProvider = { _savedServers.value },
+        playlistProvider = { _playlists.value },
+        onDataReceived = { newServers, newPlaylists ->
+            scope.launch {
+                val currentServers = _savedServers.value.toMutableList()
+                for (s in newServers) {
+                    currentServers.removeAll { it.id == s.id || (it.host == s.host && it.port == s.port && it.protocolLabel == s.protocolLabel) }
+                    currentServers.add(s)
+                }
+                _savedServers.value = currentServers
+                repository.saveServers(currentServers)
+
+                val currentPlaylists = _playlists.value.toMutableList()
+                for (p in newPlaylists) {
+                    currentPlaylists.removeAll { it.id == p.id || it.name.equals(p.name, ignoreCase = true) }
+                    currentPlaylists.add(p)
+                }
+                _playlists.value = currentPlaylists
+                repository.savePlaylists(currentPlaylists)
+            }
+        }
+    )
+
+    val discoveredDevices: StateFlow<List<NetworkDevice>> = syncManager.discoveredDevices
+    val autoSyncDeviceIds: StateFlow<Set<String>> = syncManager.autoSyncDeviceIds
+    val syncStatus: StateFlow<String?> = syncManager.syncStatus
+
+    fun toggleAutoSync(deviceId: String) = syncManager.toggleAutoSync(deviceId)
+    fun syncWithDevice(device: NetworkDevice) = syncManager.syncWithDevice(device)
+
     init {
         player.onSongFinished = { playNext() }
+        // Carga ultra-rápida desde caché local para arranque instantáneo (< 2ms)
+        val cached = repository.loadCachedSongs()
+        _songs.value = cached
+
         scope.launch {
-            _songs.value = repository.scanLocalSongs()
             _savedServers.value = repository.loadSavedServers()
             _playlists.value = repository.loadPlaylists()
+            if (cached.isEmpty()) {
+                _songs.value = repository.scanLocalSongs()
+            }
+            syncManager.start()
         }
     }
 }
