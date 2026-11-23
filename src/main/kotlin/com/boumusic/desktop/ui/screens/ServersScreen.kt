@@ -186,15 +186,66 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
 
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = NeonCyan)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = NeonCyan)
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = "Conectando y cargando archivos de ${config.name}...",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             } else if (error != null) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Error al conectar: $error", color = androidx.compose.ui.graphics.Color(0xFFEF4444))
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Text(
+                            text = "⚠️ No se pudo conectar al servidor",
+                            color = androidx.compose.ui.graphics.Color(0xFFEF4444),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = error!!,
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(
+                                onClick = { viewModel.loadServerDirectory(serverPath) },
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                            ) {
+                                Text("Reintentar", color = DarkBackground, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { viewModel.disconnectServer() },
+                                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant)
+                            ) {
+                                Text("Volver a la lista", color = TextSecondary)
+                            }
+                        }
+                    }
                 }
             } else if (serverItems.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Esta carpeta está vacía.", color = TextSecondary)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Esta carpeta está vacía.", color = TextSecondary)
+                        if (serverPath != "/") {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val parentPath = serverPath.substringBeforeLast("/", "").ifBlank { "/" }
+                            Button(
+                                onClick = { viewModel.loadServerDirectory(parentPath) },
+                                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant)
+                            ) {
+                                Text("Subir a carpeta superior", color = TextSecondary)
+                            }
+                        }
+                    }
                 }
             } else {
                 LazyColumn(
@@ -222,6 +273,7 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
 
         if (showAddDialog) {
             ServerDialog(
+                ftpManager = viewModel.ftpManager,
                 onSave = {
                     viewModel.saveServer(it)
                     showAddDialog = false

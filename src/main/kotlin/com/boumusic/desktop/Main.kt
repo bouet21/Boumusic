@@ -39,7 +39,7 @@ fun main() = application {
 
     Window(
         onCloseRequest = ::exitApplication,
-        title = "Boumusic Desktop — v0.1.2-beta (Windows / Linux)",
+        title = "Boumusic Desktop — v0.1.3-beta (Windows / Linux)",
         state = windowState
     ) {
         BoumusicDesktopTheme {
