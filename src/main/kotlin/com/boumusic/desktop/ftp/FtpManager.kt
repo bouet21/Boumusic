@@ -16,6 +16,7 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.net.ssl.SSLContext
@@ -88,6 +89,12 @@ class FtpManager(
 
         client.connectTimeout = 10000
         client.defaultTimeout = 15000
+        client.setDataTimeout(Duration.ofMillis(12000))
+        client.controlEncoding = "UTF-8"
+        client.autodetectUTF8 = true
+        try {
+            client.setPassiveNatWorkaroundStrategy { client.remoteAddress?.hostAddress ?: it }
+        } catch (_: Throwable) {}
         return client
     }
 
@@ -129,8 +136,17 @@ class FtpManager(
 
             configurePostLogin(client)
             client.enterLocalPassiveMode()
+
+            // Probar además lectura en canal de datos para verificar que el firewall permite listar
+            val testFiles = try {
+                client.listFiles() ?: client.listFiles("") ?: client.listFiles("/")
+            } catch (eData: Exception) {
+                log("testConnection: Advertencia en canal de datos: ${eData.message}")
+                null
+            }
+            log("testConnection: Éxito total. Archivos detectados en raíz: ${testFiles?.size ?: "null"}")
+
             try { client.disconnect() } catch (_: Exception) {}
-            log("testConnection: Éxito total")
             Result.success(true)
         } catch (e: Exception) {
             log("testConnection ERROR: ${e.javaClass.simpleName} - ${e.message}")
@@ -138,6 +154,35 @@ class FtpManager(
         } finally {
             try { if (client?.isConnected == true) client.disconnect() } catch (_: Exception) {}
         }
+    }
+
+    private fun isAudioExtension(name: String): Boolean {
+        val ext = name.substringAfterLast(".", "").lowercase()
+        return ext in setOf("mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma")
+    }
+
+    private fun fetchFiles(client: FTPClient, targetPath: String): Array<FTPFile>? {
+        if (targetPath == "/" || targetPath.isEmpty()) {
+            val current = client.listFiles()
+            if (current != null && current.isNotEmpty()) return current
+            val empty = client.listFiles("")
+            if (empty != null && empty.isNotEmpty()) return empty
+            val slash = client.listFiles("/")
+            if (slash != null && slash.isNotEmpty()) return slash
+            return current ?: empty ?: slash
+        }
+
+        val direct = client.listFiles(targetPath)
+        if (direct != null && direct.isNotEmpty()) return direct
+
+        if (client.changeWorkingDirectory(targetPath)) {
+            val res = client.listFiles()
+            try { client.changeToParentDirectory() } catch (_: Exception) {}
+            if (res != null && res.isNotEmpty()) return res
+        }
+
+        val alt = if (targetPath.startsWith("/")) targetPath.removePrefix("/") else "/$targetPath"
+        return client.listFiles(alt) ?: direct
     }
 
     suspend fun listDirectory(config: FtpConfig, path: String): Result<List<FtpItem>> = withContext(Dispatchers.IO) {
@@ -165,32 +210,64 @@ class FtpManager(
             }
 
             configurePostLogin(client)
-            client.enterLocalPassiveMode()
             client.setFileType(FTP.BINARY_FILE_TYPE)
 
             val targetPath = if (path.isBlank()) "/" else path
-            log("listDirectory: Solicitando listFiles('$targetPath')...")
-            var files = client.listFiles(targetPath)
+            log("listDirectory: Intentando modo pasivo para '$targetPath'...")
+            client.enterLocalPassiveMode()
 
-            if (files == null && targetPath == "/") {
-                log("listDirectory: listFiles('/') devolvió null, probando con listFiles() relativo...")
-                files = client.listFiles("") ?: client.listFiles()
+            var files: Array<FTPFile>? = null
+            var usedActive = false
+            try {
+                files = fetchFiles(client, targetPath)
+            } catch (ePasv: Exception) {
+                log("listDirectory: Falló canal pasivo (${ePasv.message}). Probando modo activo...")
+                try {
+                    client.enterLocalActiveMode()
+                    usedActive = true
+                    files = fetchFiles(client, targetPath)
+                } catch (eAct: Exception) {
+                    log("listDirectory: Falló también modo activo (${eAct.message})")
+                    throw ePasv
+                }
             }
 
-            log("listDirectory: Archivos recibidos: ${files?.size ?: "null"}")
+            val items = mutableListOf<FtpItem>()
+            if (files != null && files.isNotEmpty()) {
+                for (f in files) {
+                    val name = f.name
+                    if (name == "." || name == "..") continue
+                    val normalizedTarget = if (targetPath == "/") "" else targetPath.trimEnd('/')
+                    val fullPath = if (normalizedTarget.isEmpty()) "/$name" else "$normalizedTarget/$name"
+                    items.add(FtpItem(name = name, path = fullPath, isDirectory = f.isDirectory, size = f.size))
+                }
+            } else {
+                log("listDirectory: listFiles devolvió null o vacío, probando listNames (NLST)...")
+                val names = try {
+                    if (targetPath == "/") client.listNames() ?: client.listNames("") ?: client.listNames("/")
+                    else client.listNames(targetPath) ?: client.listNames(targetPath.removePrefix("/"))
+                } catch (eNames: Exception) {
+                    log("listDirectory: listNames error: ${eNames.message}")
+                    null
+                }
 
-            val items = files?.mapNotNull { f ->
-                val name = f.name
-                if (name != "." && name != "..") {
-                    val fullPath = if (targetPath.endsWith("/")) "$targetPath$name" else "$targetPath/$name"
-                    val isDir = f.isDirectory
-                    FtpItem(name = name, path = fullPath, isDirectory = isDir, size = f.size)
-                } else null
-            }?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: emptyList()
+                if (names != null && names.isNotEmpty()) {
+                    for (rawName in names) {
+                        val name = rawName.substringAfterLast("/").substringAfterLast("\\").trim()
+                        if (name.isEmpty() || name == "." || name == "..") continue
+                        val normalizedTarget = if (targetPath == "/") "" else targetPath.trimEnd('/')
+                        val fullPath = if (normalizedTarget.isEmpty()) "/$name" else "$normalizedTarget/$name"
+                        val isAudio = isAudioExtension(name)
+                        val isDir = !isAudio && !name.contains(".")
+                        items.add(FtpItem(name = name, path = fullPath, isDirectory = isDir, size = 0L))
+                    }
+                }
+            }
 
             try { client.disconnect() } catch (_: Exception) {}
-            log("listDirectory: Éxito con ${items.size} elementos devueltos")
-            Result.success(items)
+            val sorted = items.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+            log("listDirectory: Éxito con ${sorted.size} elementos (modo activo=$usedActive)")
+            Result.success(sorted)
         } catch (e: Exception) {
             log("listDirectory ERROR: ${e.javaClass.simpleName} - ${e.message}")
             Result.failure(friendlyException(e, host, port))
@@ -205,7 +282,7 @@ class FtpManager(
             msg.contains("Connection refused", ignoreCase = true) ->
                 Exception("Conexión rechazada en $host:$port. Compruebe que la IP y el puerto sean correctos y que el servidor FTP esté activo.")
             e is java.net.SocketTimeoutException || msg.contains("timed out", ignoreCase = true) ->
-                Exception("Tiempo de espera agotado al conectar a $host:$port. Compruebe que el PC y el servidor estén en la misma red y que el servidor FTP esté activo.")
+                Exception("Tiempo de espera agotado al conectar o transferir datos con $host:$port. Compruebe que el firewall permita puertos pasivos o la conexión.")
             e is java.net.UnknownHostException ->
                 Exception("No se puede resolver el host '$host'. Compruebe la dirección IP.")
             else ->
@@ -223,7 +300,7 @@ class FtpManager(
         val user = config.username.trim().ifBlank { "anonymous" }
         val loggedIn = client.login(user, config.password)
         if (!loggedIn) {
-            client.disconnect()
+            try { client.disconnect() } catch (_: Exception) {}
             throw Exception("Autenticación fallida al reproducir en FTP")
         }
 
@@ -232,12 +309,22 @@ class FtpManager(
         client.setFileType(FTP.BINARY_FILE_TYPE)
 
         val targetPath = if (remotePath.isBlank()) "/" else remotePath
-        val ftpStream = client.retrieveFileStream(targetPath)
-            ?: run {
-                val alt = if (targetPath.startsWith("/")) targetPath.removePrefix("/") else "/$targetPath"
-                client.retrieveFileStream(alt)
-            }
-            ?: throw Exception("No se pudo abrir el archivo remoto: $remotePath")
+        var ftpStream = client.retrieveFileStream(targetPath)
+        if (ftpStream == null) {
+            val alt = if (targetPath.startsWith("/")) targetPath.removePrefix("/") else "/$targetPath"
+            ftpStream = client.retrieveFileStream(alt)
+        }
+        if (ftpStream == null) {
+            try {
+                client.enterLocalActiveMode()
+                ftpStream = client.retrieveFileStream(targetPath) ?: client.retrieveFileStream(if (targetPath.startsWith("/")) targetPath.removePrefix("/") else "/$targetPath")
+            } catch (_: Exception) {}
+        }
+
+        if (ftpStream == null) {
+            try { client.disconnect() } catch (_: Exception) {}
+            throw Exception("No se pudo abrir el archivo remoto: $remotePath")
+        }
 
         return object : InputStream() {
             override fun read(): Int = ftpStream.read()
@@ -269,7 +356,7 @@ class FtpManager(
             val user = config.username.trim().ifBlank { "anonymous" }
             val loggedIn = client.login(user, config.password)
             if (!loggedIn) {
-                client.disconnect()
+                try { client.disconnect() } catch (_: Exception) {}
                 return@withContext Result.failure(Exception("Autenticación fallida al descargar"))
             }
 
@@ -278,11 +365,18 @@ class FtpManager(
             client.setFileType(FTP.BINARY_FILE_TYPE)
 
             val targetPath = if (remotePath.isBlank()) "/" else remotePath
-            val success = FileOutputStream(destFile).use { out ->
-                client.retrieveFile(targetPath, out) || run {
-                    val alt = if (targetPath.startsWith("/")) targetPath.removePrefix("/") else "/$targetPath"
-                    client.retrieveFile(alt, out)
-                }
+            val alt = if (targetPath.startsWith("/")) targetPath.removePrefix("/") else "/$targetPath"
+            var success = FileOutputStream(destFile).use { out ->
+                client.retrieveFile(targetPath, out) || client.retrieveFile(alt, out)
+            }
+
+            if (!success) {
+                try {
+                    client.enterLocalActiveMode()
+                    success = FileOutputStream(destFile).use { out ->
+                        client.retrieveFile(targetPath, out) || client.retrieveFile(alt, out)
+                    }
+                } catch (_: Exception) {}
             }
 
             try { client.disconnect() } catch (_: Exception) {}
