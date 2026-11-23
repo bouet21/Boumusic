@@ -1,15 +1,15 @@
-# 🖥️ Boumusic Desktop — Reproductor de Música Ultraligero (Windows & Linux)
+# 🖥️ Boumusic Desktop — Reproductor de Música Moderno y Ligero (Windows & Linux)
 
 [![Beta Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Beta)](https://github.com/bouet21/Boumusic-Desktop/releases)
 [![Platform](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux-7B2CBF)](#)
 [![Compose Desktop](https://img.shields.io/badge/Compose%20Multiplatform-1.6.11-brightgreen)](https://www.jetbrains.com/lp/compose-multiplatform/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue)](https://kotlinlang.org)
-[![RAM Usage](https://img.shields.io/badge/RAM-%3C%2080%20MB%20(Ultraligero)-success)](#)
+[![RAM Usage](https://img.shields.io/badge/RAM-~250%20MB%20(Eficiente%20vs%20Electron)-success)](#)
 [![No Ads](https://img.shields.io/badge/Publicidad-0%25%20(Sin%20Anuncios)-success)](#)
 
-**Boumusic Desktop** es la versión para ordenador (Windows y Linux) del reproductor **Boumusic**. Ha sido diseñada bajo una premisa fundamental: **máxima ligereza y rendimiento**.
+**Boumusic Desktop** es la versión para ordenador (Windows y Linux) del reproductor **Boumusic**. Ha sido diseñada bajo una premisa fundamental: **máxima fluidez, ergonomía y rendimiento sin motores web**.
 
-A diferencia de los reproductores modernos basados en Electron o navegadores embebidos que consumen entre 400 MB y 800 MB de memoria RAM, Boumusic Desktop está construido sobre **Compose Multiplatform (Skia)** con renderizado directo por aceleración gráfica de hardware (DirectX en Windows / OpenGL y Vulkan en Linux), consumiendo **menos de 80 MB de memoria RAM** y un **0% de uso de procesador en reposo**.
+A diferencia de los reproductores modernos basados en Electron o navegadores embebidos (como Spotify o Discord) que consumen entre 500 MB y 1 GB de memoria RAM con múltiples procesos auxiliares de Chromium, Boumusic Desktop está construido sobre **Compose Multiplatform (Skia)** con renderizado directo por aceleración gráfica de hardware (DirectX en Windows / OpenGL y Vulkan en Linux), manteniendo un consumo estable de **~250 MB de memoria RAM**, un **0% de uso de procesador en reposo** y una interfaz fluida a 60/120 FPS.
 
 ---
 

@@ -51,7 +51,15 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.boumusic.desktop.MainKt"
-        jvmArgs("-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1")
+        jvmArgs(
+            "-XX:+TieredCompilation",
+            "-XX:TieredStopAtLevel=1",
+            "-Xms32m",
+            "-Xmx128m",
+            "-XX:+UseSerialGC",
+            "-XX:MinHeapFreeRatio=10",
+            "-XX:MaxHeapFreeRatio=25"
+        )
         nativeDistributions {
             targetFormats(
                 TargetFormat.Msi,
@@ -60,7 +68,7 @@ compose.desktop {
             )
             packageName = "Boumusic"
             packageVersion = "0.2.1"
-            description = "Boumusic Desktop - Reproductor de Música Ultraligero para Windows y Linux"
+            description = "Boumusic Desktop - Reproductor de Música Moderno y Ligero para Windows y Linux"
             vendor = "Boumusic"
             copyright = "© 2026 Boumusic"
 
