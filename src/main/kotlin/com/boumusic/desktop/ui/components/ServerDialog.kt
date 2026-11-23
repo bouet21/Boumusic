@@ -88,13 +88,31 @@ fun ServerDialog(
             isFtps -> 21
             else -> 21
         }
-        val port = portStr.toIntOrNull() ?: defaultPort
+        var cleanHost = host.trim()
+            .removePrefix("ftp://")
+            .removePrefix("ftps://")
+            .removePrefix("http://")
+            .removePrefix("https://")
+            .removePrefix("smb://")
+            .removePrefix("\\\\")
+            .trimEnd('/')
+
+        var port = portStr.toIntOrNull() ?: defaultPort
+        if (cleanHost.contains(":")) {
+            val colonIdx = cleanHost.lastIndexOf(':')
+            val pCandidate = cleanHost.substring(colonIdx + 1).toIntOrNull()
+            if (pCandidate != null) {
+                port = pCandidate
+                cleanHost = cleanHost.substring(0, colonIdx)
+            }
+        }
+
         return FtpConfig(
             id = initialConfig?.id ?: java.util.UUID.randomUUID().toString(),
             name = name.ifBlank { "Servidor" },
-            host = host.trim(),
+            host = cleanHost,
             port = port,
-            username = username.ifBlank { if (isSmb) "guest" else "anonymous" },
+            username = username.trim().ifBlank { if (isSmb) "guest" else "anonymous" },
             password = password,
             isFtps = isFtps,
             isWebDav = isWebDav,
@@ -214,7 +232,24 @@ fun ServerDialog(
 
                 OutlinedTextField(
                     value = host,
-                    onValueChange = { host = it },
+                    onValueChange = { input ->
+                        var h = input.trim()
+                            .removePrefix("ftp://")
+                            .removePrefix("ftps://")
+                            .removePrefix("http://")
+                            .removePrefix("https://")
+                            .removePrefix("smb://")
+                            .removePrefix("\\\\")
+                        if (h.contains(":")) {
+                            val parts = h.split(":")
+                            h = parts[0]
+                            val p = parts.getOrNull(1)?.filter { it.isDigit() } ?: ""
+                            if (p.isNotBlank()) {
+                                portStr = p
+                            }
+                        }
+                        host = h
+                    },
                     label = { Text("Dirección IP o Host (Ej: 192.168.1.50)", fontSize = 11.sp) },
                     placeholder = { Text("192.168.1.50 o midominio.com", fontSize = 11.sp) },
                     modifier = Modifier.fillMaxWidth(),

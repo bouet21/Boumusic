@@ -83,4 +83,33 @@ class DesktopMusicTest {
         assertEquals("Lista M3U", parsed.name)
         assertEquals(listOf(1L), parsed.songIds)
     }
+
+    @Test
+    fun testFtpSanitizeHostAndPort() {
+        val ftpManager = com.boumusic.desktop.ftp.FtpManager()
+
+        val c1 = FtpConfig(host = "ftp://192.168.1.50:2121", port = 21)
+        val (h1, p1, path1) = ftpManager.sanitizeHostAndPort(c1)
+        assertEquals("192.168.1.50", h1)
+        assertEquals(2121, p1)
+        assertEquals("/", path1)
+
+        val c2 = FtpConfig(host = "192.168.1.100/musica", port = 21)
+        val (h2, p2, path2) = ftpManager.sanitizeHostAndPort(c2)
+        assertEquals("192.168.1.100", h2)
+        assertEquals(21, p2)
+        assertEquals("/musica", path2)
+
+        val c3 = FtpConfig(host = "ftps://servidor.lan:2121/shared/audio/", port = 21)
+        val (h3, p3, path3) = ftpManager.sanitizeHostAndPort(c3)
+        assertEquals("servidor.lan", h3)
+        assertEquals(2121, p3)
+        assertEquals("/shared/audio", path3)
+
+        val c4 = FtpConfig(host = "  10.0.0.5:990  ", port = 21)
+        val (h4, p4, path4) = ftpManager.sanitizeHostAndPort(c4)
+        assertEquals("10.0.0.5", h4)
+        assertEquals(990, p4)
+        assertEquals("/", path4)
+    }
 }

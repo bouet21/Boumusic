@@ -340,9 +340,11 @@ class DesktopMusicViewModel(
     val serverError: StateFlow<String?> = _serverError.asStateFlow()
 
     fun connectServer(config: FtpConfig) {
+        val defaultPath = ftpManager.sanitizeHostAndPort(config).third
         _activeServer.value = config
-        _serverPath.value = "/"
-        loadServerDirectory("/")
+        _serverPath.value = defaultPath
+        _serverItems.value = emptyList()
+        loadServerDirectory(defaultPath)
     }
 
     fun disconnectServer() {
@@ -356,13 +358,18 @@ class DesktopMusicViewModel(
         _isServerLoading.value = true
         _serverError.value = null
         scope.launch(Dispatchers.IO) {
-            val result = ftpManager.listDirectory(config, path)
-            result.onSuccess { items ->
-                _serverItems.value = items
-                _serverPath.value = path
-                _isServerLoading.value = false
-            }.onFailure { err ->
-                _serverError.value = err.message ?: "Error al conectar"
+            try {
+                val result = ftpManager.listDirectory(config, path)
+                result.onSuccess { items ->
+                    _serverItems.value = items
+                    _serverPath.value = path
+                    _isServerLoading.value = false
+                }.onFailure { err ->
+                    _serverError.value = err.message ?: "Error al conectar al servidor"
+                    _isServerLoading.value = false
+                }
+            } catch (e: Exception) {
+                _serverError.value = e.message ?: "Error inesperado de conexión"
                 _isServerLoading.value = false
             }
         }
