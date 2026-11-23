@@ -342,11 +342,10 @@ class DesktopMusicViewModel(
     val serverError: StateFlow<String?> = _serverError.asStateFlow()
 
     fun connectServer(config: FtpConfig) {
-        val defaultPath = ftpManager.sanitizeHostAndPort(config).third
         _activeServer.value = config
-        _serverPath.value = defaultPath
+        _serverPath.value = "/"
         _serverItems.value = emptyList()
-        loadServerDirectory(defaultPath)
+        loadServerDirectory("/")
     }
 
     fun disconnectServer() {
@@ -361,7 +360,7 @@ class DesktopMusicViewModel(
         _serverError.value = null
         scope.launch(Dispatchers.IO) {
             try {
-                withTimeout(9000L) {
+                withTimeout(18000L) {
                     val result = ftpManager.listDirectory(config, path)
                     result.onSuccess { items ->
                         _serverItems.value = items
@@ -373,7 +372,7 @@ class DesktopMusicViewModel(
                     }
                 }
             } catch (e: TimeoutCancellationException) {
-                _serverError.value = "Tiempo de espera agotado (9s). El servidor en ${config.host}:${config.port} no respondió. Verifique la dirección IP y que el servidor FTP esté iniciado."
+                _serverError.value = "Tiempo de espera agotado al conectar a ${config.host}:${config.port}. Compruebe que ambos dispositivos estén en la misma red Wi-Fi y que el servidor FTP esté activo."
                 _isServerLoading.value = false
             } catch (e: Exception) {
                 _serverError.value = e.message ?: "Error inesperado de conexión"

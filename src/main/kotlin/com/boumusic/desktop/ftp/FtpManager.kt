@@ -16,7 +16,8 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
-import java.time.Duration
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
@@ -26,39 +27,47 @@ class FtpManager(
     val webDavManager: WebDavManager = WebDavManager()
 ) {
 
-    fun sanitizeHostAndPort(config: FtpConfig): Triple<String, Int, String> {
-        var host = config.host.trim()
+    private val logFile by lazy {
+        try {
+            val dir = File(System.getProperty("user.home"), ".boumusic").apply { if (!exists()) mkdirs() }
+            File(dir, "ftp_debug.log")
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun log(msg: String) {
+        val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+        val line = "[$time] $msg"
+        println(line)
+        try {
+            logFile?.appendText("$line\n")
+        } catch (_: Exception) {}
+    }
+
+    fun sanitizeHostAndPort(config: FtpConfig): Pair<String, Int> {
+        var h = config.host.trim()
             .removePrefix("ftp://")
             .removePrefix("ftps://")
             .removePrefix("http://")
             .removePrefix("https://")
             .removePrefix("smb://")
             .removePrefix("\\\\")
-            .trim()
+            .trimEnd('/')
 
-        var initialPath = "/"
-        if (host.contains("/")) {
-            val slashIdx = host.indexOf('/')
-            val pathPart = host.substring(slashIdx).trimEnd('/')
-            if (pathPart.isNotBlank()) {
-                initialPath = pathPart
-            }
-            host = host.substring(0, slashIdx).trim()
-        }
-
-        var port = config.port
-        if (host.contains(":")) {
-            val colonIdx = host.lastIndexOf(':')
-            val portCandidate = host.substring(colonIdx + 1).toIntOrNull()
-            if (portCandidate != null) {
-                port = portCandidate
-                host = host.substring(0, colonIdx).trim()
+        var p = config.port
+        if (h.contains(":")) {
+            val idx = h.lastIndexOf(':')
+            val pCandidate = h.substring(idx + 1).toIntOrNull()
+            if (pCandidate != null) {
+                p = pCandidate
+                h = h.substring(0, idx).trim()
             }
         }
-        return Triple(host, port, initialPath)
+        return h to p
     }
 
-    private fun createClient(config: FtpConfig, host: String): FTPClient {
+    private fun createClient(config: FtpConfig): FTPClient {
         val client = if (config.isFtps) {
             val trustAllManager = arrayOf<TrustManager>(
                 object : X509TrustManager {
@@ -77,12 +86,8 @@ class FtpManager(
             FTPClient()
         }
 
-        client.connectTimeout = 6000
-        client.defaultTimeout = 6000
-        client.setDataTimeout(Duration.ofMillis(6000))
-        try {
-            client.setPassiveNatWorkaroundStrategy { host }
-        } catch (_: Throwable) {}
+        client.connectTimeout = 10000
+        client.defaultTimeout = 15000
         return client
     }
 
@@ -92,7 +97,7 @@ class FtpManager(
                 client.execPBSZ(0)
                 client.execPROT("P")
             } catch (e: Exception) {
-                e.printStackTrace()
+                log("Error en configurePostLogin (FTPS): ${e.message}")
             }
         }
     }
@@ -101,17 +106,17 @@ class FtpManager(
         if (config.isSmb) return@withContext smbManager.testConnection(config)
         if (config.isWebDav) return@withContext webDavManager.testConnection(config)
 
-        val (host, port, _) = sanitizeHostAndPort(config)
+        val (host, port) = sanitizeHostAndPort(config)
         if (host.isBlank()) {
             return@withContext Result.failure(Exception("La dirección IP o host no puede estar vacía"))
         }
 
+        log("testConnection: Conectando a $host:$port...")
         var client: FTPClient? = null
         try {
-            println("[FTP] Probando conexión con $host:$port...")
-            client = createClient(config, host)
+            client = createClient(config)
             client.connect(host, port)
-            client.soTimeout = 6000
+            log("testConnection: Conectado. Reply: ${client.replyCode} - ${client.replyString.trim()}")
 
             val reply = client.replyCode
             if (!FTPReply.isPositiveCompletion(reply)) {
@@ -120,7 +125,9 @@ class FtpManager(
 
             val user = config.username.trim().ifBlank { "anonymous" }
             val pass = config.password
+            log("testConnection: Intentando login con usuario '$user'...")
             val loginSuccess = client.login(user, pass)
+            log("testConnection: Login resultado: $loginSuccess. Reply: ${client.replyCode} - ${client.replyString.trim()}")
             if (!loginSuccess) {
                 return@withContext Result.failure(Exception("Autenticación fallida: usuario o contraseña incorrectos en $host:$port"))
             }
@@ -128,11 +135,11 @@ class FtpManager(
             configurePostLogin(client)
             client.enterLocalPassiveMode()
             try { client.logout() } catch (_: Exception) {}
-            println("[FTP] Conexión de prueba exitosa a $host:$port")
+            log("testConnection: Éxito total")
             Result.success(true)
         } catch (e: Exception) {
-            println("[FTP] Error de prueba en $host:$port: ${e.message}")
-            Result.failure(e)
+            log("testConnection ERROR: ${e.javaClass.simpleName} - ${e.message}")
+            Result.failure(friendlyException(e, host, port))
         } finally {
             try { if (client?.isConnected == true) client.disconnect() } catch (_: Exception) {}
         }
@@ -142,19 +149,17 @@ class FtpManager(
         if (config.isSmb) return@withContext smbManager.listDirectory(config, path)
         if (config.isWebDav) return@withContext webDavManager.listDirectory(config, path)
 
-        val (host, port, defaultPath) = sanitizeHostAndPort(config)
+        val (host, port) = sanitizeHostAndPort(config)
         if (host.isBlank()) {
             return@withContext Result.failure(Exception("La dirección IP o host no puede estar vacía"))
         }
 
-        val effectivePath = if (path.isBlank() || path == "/") defaultPath else path
-
+        log("listDirectory: Conectando a $host:$port para listar ruta '$path'...")
         var client: FTPClient? = null
         try {
-            println("[FTP] Conectando a $host:$port para listar '$effectivePath'...")
-            client = createClient(config, host)
+            client = createClient(config)
             client.connect(host, port)
-            client.soTimeout = 6000
+            log("listDirectory: Conectado. Reply: ${client.replyCode}")
 
             val reply = client.replyCode
             if (!FTPReply.isPositiveCompletion(reply)) {
@@ -164,73 +169,59 @@ class FtpManager(
             val user = config.username.trim().ifBlank { "anonymous" }
             val pass = config.password
             val loginSuccess = client.login(user, pass)
+            log("listDirectory: Login con '$user': $loginSuccess")
             if (!loginSuccess) {
-                return@withContext Result.failure(Exception("Autenticación fallida: usuario o contraseña incorrectos en $host:$port"))
+                return@withContext Result.failure(Exception("Autenticación fallida en $host:$port (usuario: $user)"))
             }
 
             configurePostLogin(client)
             client.enterLocalPassiveMode()
             client.setFileType(FTP.BINARY_FILE_TYPE)
 
-            val targetPath = if (effectivePath.isBlank()) "/" else effectivePath
-            var files: Array<FTPFile>? = null
+            val targetPath = if (path.isBlank()) "/" else path
+            log("listDirectory: Solicitando listFiles('$targetPath')...")
+            var files = client.listFiles(targetPath)
 
-            // 1. Intentar listar directamente la ruta
-            try {
-                files = client.listFiles(targetPath)
-                println("[FTP] listFiles('$targetPath') -> ${files?.size ?: "null"}")
-            } catch (e: Exception) {
-                println("[FTP] Error en listFiles('$targetPath'): ${e.message}")
-                try { client.completePendingCommand() } catch (_: Throwable) {}
+            if (files == null && targetPath == "/") {
+                log("listDirectory: listFiles('/') devolvió null, probando con listFiles() relativo...")
+                files = client.listFiles("") ?: client.listFiles()
             }
 
-            // 2. Si files es nulo, probar con formato alternativo (ej. "" vs "/" para servidores relativos)
-            if (files == null) {
-                try { client.completePendingCommand() } catch (_: Throwable) {}
-                try {
-                    val altPath = if (targetPath == "/") "" else if (targetPath.startsWith("/")) targetPath.removePrefix("/") else "/$targetPath"
-                    files = client.listFiles(altPath)
-                    println("[FTP] listFiles('$altPath') -> ${files?.size ?: "null"}")
-                } catch (e: Exception) {
-                    println("[FTP] Error en listFiles alternativo: ${e.message}")
-                    try { client.completePendingCommand() } catch (_: Throwable) {}
-                }
-            }
+            log("listDirectory: Archivos recibidos: ${files?.size ?: "null"}")
 
-            // 3. Si aún es nulo, probar cambiando de directorio de trabajo
-            if (files == null) {
-                try { client.completePendingCommand() } catch (_: Throwable) {}
-                try {
-                    if (client.changeWorkingDirectory(targetPath)) {
-                        files = client.listFiles()
-                        println("[FTP] changeWorkingDirectory('$targetPath') + listFiles() -> ${files?.size ?: "null"}")
-                    }
-                } catch (e: Exception) {
-                    println("[FTP] Error en changeWorkingDirectory: ${e.message}")
-                }
-            }
-
-            if (files == null) {
-                return@withContext Result.failure(Exception("No se pudieron listar los archivos de '$targetPath'. Compruebe los permisos o la ruta en el servidor."))
-            }
-
-            val items = files.mapNotNull { f ->
+            val items = mutableListOf<FtpItem>()
+            files?.forEach { f ->
                 val name = f.name
-                if (name == "." || name == "..") return@mapNotNull null
-                val normalizedTarget = if (targetPath == "/") "" else targetPath.trimEnd('/')
-                val itemPath = if (normalizedTarget.isEmpty()) "/$name" else "$normalizedTarget/$name"
-                FtpItem(name = name, path = itemPath, isDirectory = f.isDirectory, size = f.size)
-            }.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+                if (name != "." && name != "..") {
+                    val fullPath = if (targetPath.endsWith("/")) "$targetPath$name" else "$targetPath/$name"
+                    val isDir = f.isDirectory
+                    items.add(FtpItem(name = name, path = fullPath, isDirectory = isDir, size = f.size))
+                }
+            }
 
             try { client.logout() } catch (_: Exception) {}
-            println("[FTP] Listado completado con éxito: ${items.size} elementos encontrados")
-            Result.success(items)
+            val sorted = items.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+            log("listDirectory: Éxito con ${sorted.size} elementos devueltos")
+            Result.success(sorted)
         } catch (e: Exception) {
-            println("[FTP] Error en listDirectory: ${e.message}")
-            e.printStackTrace()
-            Result.failure(e)
+            log("listDirectory ERROR: ${e.javaClass.simpleName} - ${e.message}")
+            Result.failure(friendlyException(e, host, port))
         } finally {
             try { if (client?.isConnected == true) client.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    private fun friendlyException(e: Exception, host: String, port: Int): Exception {
+        val msg = e.message ?: ""
+        return when {
+            msg.contains("Connection refused", ignoreCase = true) ->
+                Exception("Conexión rechazada en $host:$port. Compruebe que la IP y el puerto sean correctos (si usa un móvil con WiFi FTP Server suele ser puerto 2121 en vez de 21).")
+            e is java.net.SocketTimeoutException || msg.contains("timed out", ignoreCase = true) ->
+                Exception("Tiempo de espera agotado al conectar a $host:$port. Compruebe que el PC y el servidor estén conectados a la misma red Wi-Fi y que el servidor FTP esté activo.")
+            e is java.net.UnknownHostException ->
+                Exception("No se puede resolver el host '$host'. Compruebe la dirección IP.")
+            else ->
+                Exception("${e.javaClass.simpleName}: ${e.message ?: "Error al comunicar con el servidor FTP"}")
         }
     }
 
@@ -238,10 +229,9 @@ class FtpManager(
         if (config.isSmb) return smbManager.openStream(config, remotePath)
         if (config.isWebDav) return webDavManager.openStream(config, remotePath)
 
-        val (host, port, _) = sanitizeHostAndPort(config)
-        val client = createClient(config, host)
+        val (host, port) = sanitizeHostAndPort(config)
+        val client = createClient(config)
         client.connect(host, port)
-        client.soTimeout = 15000
         val user = config.username.trim().ifBlank { "anonymous" }
         val loggedIn = client.login(user, config.password)
         if (!loggedIn) {
@@ -285,10 +275,9 @@ class FtpManager(
             }
 
             destFile.parentFile?.mkdirs()
-            val (host, port, _) = sanitizeHostAndPort(config)
-            val client = createClient(config, host)
+            val (host, port) = sanitizeHostAndPort(config)
+            val client = createClient(config)
             client.connect(host, port)
-            client.soTimeout = 15000
             val user = config.username.trim().ifBlank { "anonymous" }
             val loggedIn = client.login(user, config.password)
             if (!loggedIn) {
