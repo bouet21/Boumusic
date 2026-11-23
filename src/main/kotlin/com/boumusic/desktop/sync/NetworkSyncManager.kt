@@ -25,6 +25,7 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.NetworkInterface
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -138,9 +139,28 @@ class NetworkSyncManager(
         }
     }
 
+    private fun getBroadcastAddresses(): List<InetAddress> {
+        val list = mutableListOf<InetAddress>()
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces != null && interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                for (addr in iface.interfaceAddresses) {
+                    val b = addr.broadcast
+                    if (b != null) list.add(b)
+                }
+            }
+        } catch (_: Exception) {}
+        try { list.add(InetAddress.getByName("255.255.255.255")) } catch (_: Exception) {}
+        return list.distinct()
+    }
+
     private fun startUdpDiscovery() {
         try {
-            udpSocket = DatagramSocket(udpPort).apply {
+            udpSocket = DatagramSocket(null).apply {
+                reuseAddress = true
+                bind(InetSocketAddress(udpPort))
                 broadcast = true
                 soTimeout = 2000
             }
@@ -206,15 +226,18 @@ class NetworkSyncManager(
                 }
             }
 
-            // Emitir ping de broadcast cada 5 segundos
+            // Emitir ping de broadcast cada 5 segundos a todas las interfaces
             broadcastJob = scope.launch {
                 while (isActive) {
                     try {
                         val ping = "BOUMUSIC_DISCOVERY:{\"id\":\"$deviceId\",\"name\":\"$deviceName\",\"type\":\"PC\",\"port\":$httpPort}"
                         val bytes = ping.toByteArray(Charsets.UTF_8)
-                        val broadcastAddr = InetAddress.getByName("255.255.255.255")
-                        val packet = DatagramPacket(bytes, bytes.size, broadcastAddr, udpPort)
-                        udpSocket?.send(packet)
+                        for (bAddr in getBroadcastAddresses()) {
+                            try {
+                                val packet = DatagramPacket(bytes, bytes.size, bAddr, udpPort)
+                                udpSocket?.send(packet)
+                            } catch (_: Exception) {}
+                        }
                     } catch (e: Exception) {
                         // Puede fallar si no hay interfaz de red activa
                     }

@@ -14,6 +14,7 @@ import com.boumusic.desktop.sync.NetworkSyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,7 +56,7 @@ class DesktopMusicViewModel(
     val player: AudioPlayer = AudioPlayer()
 ) {
 
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _currentSection = MutableStateFlow(DesktopSection.LIBRARY)
     val currentSection: StateFlow<DesktopSection> = _currentSection.asStateFlow()
@@ -359,13 +360,18 @@ class DesktopMusicViewModel(
         _isServerLoading.value = true
         _serverError.value = null
         scope.launch(Dispatchers.IO) {
-            val result = ftpManager.listDirectory(config, path)
-            result.onSuccess { items ->
-                _serverItems.value = items
-                _serverPath.value = path
-                _isServerLoading.value = false
-            }.onFailure { err ->
-                _serverError.value = err.message ?: "Error al conectar al servidor"
+            try {
+                val result = ftpManager.listDirectory(config, path)
+                result.onSuccess { items ->
+                    _serverItems.value = items
+                    _serverPath.value = path
+                    _isServerLoading.value = false
+                }.onFailure { err ->
+                    _serverError.value = err.message ?: "Error al conectar al servidor"
+                    _isServerLoading.value = false
+                }
+            } catch (t: Throwable) {
+                _serverError.value = t.message ?: "Error inesperado al conectar al servidor"
                 _isServerLoading.value = false
             }
         }
