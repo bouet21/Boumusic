@@ -222,19 +222,16 @@ class AudioPlayer {
             val bytesPerSecond = (sampleRate * channels * 2).toLong()
 
             // Posicionamiento de búsqueda rápido y seguro (Seek)
+            // IMPORTANTE: Nunca usar decodedStream.skip() porque en decodificadores Java Sound (MP3SPI)
+            // skip() interpreta los bytes como tamaño comprimido o marcos MP3, saltando más allá del fin de archivo.
             if (startFromSec > 0 && bytesPerSecond > 0) {
                 var remainingToSkip = startFromSec * bytesPerSecond
-                val skipBuf = ByteArray(32768)
+                val skipBuf = ByteArray(65536)
                 while (remainingToSkip > 0 && generation == currentGeneration) {
-                    val skipped = try { decodedStream.skip(remainingToSkip) } catch (_: Exception) { 0L }
-                    if (skipped > 0) {
-                        remainingToSkip -= skipped
-                    } else {
-                        val toRead = remainingToSkip.coerceAtMost(skipBuf.size.toLong()).toInt()
-                        val r = decodedStream.read(skipBuf, 0, toRead)
-                        if (r <= 0) break
-                        remainingToSkip -= r
-                    }
+                    val toRead = remainingToSkip.coerceAtMost(skipBuf.size.toLong()).toInt()
+                    val r = try { decodedStream.read(skipBuf, 0, toRead) } catch (_: Exception) { -1 }
+                    if (r <= 0) break
+                    remainingToSkip -= r
                 }
             }
 
@@ -358,7 +355,12 @@ class AudioPlayer {
 
     fun seekTo(seconds: Long) {
         val song = _currentSong.value ?: return
-        val clampedSec = seconds.coerceIn(0L, _durationSec.value.coerceAtLeast(100L))
+        val maxDuration = _durationSec.value
+        val clampedSec = if (maxDuration > 0L) {
+            seconds.coerceIn(0L, (maxDuration - 1).coerceAtLeast(0L))
+        } else {
+            seconds.coerceAtLeast(0L)
+        }
         _currentPositionSec.value = clampedSec
         play(song, startFromSec = clampedSec, streamProvider = activeStreamProvider)
     }

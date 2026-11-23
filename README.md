@@ -1,6 +1,6 @@
 # 🖥️ Boumusic Desktop — Reproductor de Música Moderno y Ligero (Windows & Linux)
 
-[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v1.0.6)](https://github.com/bouet21/Boumusic-Desktop/releases)
+[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v1.0.7)](https://github.com/bouet21/Boumusic-Desktop/releases)
 [![Platform](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux-7B2CBF)](#)
 [![Compose Desktop](https://img.shields.io/badge/Compose%20Multiplatform-1.6.11-brightgreen)](https://www.jetbrains.com/lp/compose-multiplatform/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue)](https://kotlinlang.org)
@@ -67,7 +67,11 @@ Boumusic Desktop utiliza `jpackage` para generar instaladores compactos y ejecut
 
 ---
 
-## 🆕 Novedades en v1.0.6
+## 🆕 Novedades en v1.0.7
+- **Búsqueda y Salto de Pista (Seek) Instantáneo y Preciso**: Corregido el fallo por el cual arrastrar la barra de progreso provocaba un salto a la siguiente canción. Ahora el drenaje de tramas PCM se realiza de forma exacta sin disparar el fin de archivo prematuro en decodificadores Java Sound (MP3SPI/FLAC/Vorbis).
+- **Aleatorio Inteligente y Determinista**: En modo aleatorio, avanzar (`Next`) genera canciones aleatorias sin repetir hasta agotar la cola, mientras que retroceder (`Previous`) vuelve con exactitud y determinismo por el historial de canciones efectivamente reproducidas.
+- **Protección de retroceso**: Si una canción lleva más de 3 segundos sonando, el botón Anterior la reinicia al segundo 0; una segunda pulsación retrocede a la canción previa.
+- **Soporte SMB Completo**: Compatibilidad nativa sin excepciones GSSException.
 - **Aleatorio Inteligente y Determinista**: En modo aleatorio, avanzar (`Next`) genera canciones aleatorias sin repetir hasta agotar la cola, mientras que retroceder (`Previous`) vuelve con exactitud y determinismo por el historial de canciones efectivamente reproducidas (no salta a canciones aleatorias al dar marcha atrás).
 - **Protección de retroceso**: Si una canción lleva más de 3 segundos sonando, el botón Anterior la reinicia al segundo 0; una segunda pulsación retrocede a la canción previa.
 - **Soporte SMB Completo**: Compatibilidad nativa sin excepciones GSSException.
