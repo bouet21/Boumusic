@@ -194,6 +194,19 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
                             color = TextSecondary,
                             fontSize = 13.sp
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "${config.host}:${config.port} ($serverPath)",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                        Spacer(modifier = Modifier.height(18.dp))
+                        Button(
+                            onClick = { viewModel.disconnectServer() },
+                            colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant)
+                        ) {
+                            Text("Cancelar", color = TextSecondary, fontSize = 12.sp)
+                        }
                     }
                 }
             } else if (error != null) {

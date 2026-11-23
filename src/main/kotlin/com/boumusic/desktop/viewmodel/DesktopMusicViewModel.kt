@@ -14,6 +14,7 @@ import com.boumusic.desktop.sync.NetworkSyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.util.UUID
 
@@ -359,15 +361,20 @@ class DesktopMusicViewModel(
         _serverError.value = null
         scope.launch(Dispatchers.IO) {
             try {
-                val result = ftpManager.listDirectory(config, path)
-                result.onSuccess { items ->
-                    _serverItems.value = items
-                    _serverPath.value = path
-                    _isServerLoading.value = false
-                }.onFailure { err ->
-                    _serverError.value = err.message ?: "Error al conectar al servidor"
-                    _isServerLoading.value = false
+                withTimeout(9000L) {
+                    val result = ftpManager.listDirectory(config, path)
+                    result.onSuccess { items ->
+                        _serverItems.value = items
+                        _serverPath.value = path
+                        _isServerLoading.value = false
+                    }.onFailure { err ->
+                        _serverError.value = err.message ?: "Error al conectar al servidor"
+                        _isServerLoading.value = false
+                    }
                 }
+            } catch (e: TimeoutCancellationException) {
+                _serverError.value = "Tiempo de espera agotado (9s). El servidor en ${config.host}:${config.port} no respondió. Verifique la dirección IP y que el servidor FTP esté iniciado."
+                _isServerLoading.value = false
             } catch (e: Exception) {
                 _serverError.value = e.message ?: "Error inesperado de conexión"
                 _isServerLoading.value = false

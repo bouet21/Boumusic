@@ -16,6 +16,7 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.time.Duration
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
@@ -57,7 +58,7 @@ class FtpManager(
         return Triple(host, port, initialPath)
     }
 
-    private fun createClient(config: FtpConfig): FTPClient {
+    private fun createClient(config: FtpConfig, host: String): FTPClient {
         val client = if (config.isFtps) {
             val trustAllManager = arrayOf<TrustManager>(
                 object : X509TrustManager {
@@ -76,8 +77,12 @@ class FtpManager(
             FTPClient()
         }
 
-        client.connectTimeout = 8000
-        client.defaultTimeout = 12000
+        client.connectTimeout = 6000
+        client.defaultTimeout = 6000
+        client.setDataTimeout(Duration.ofMillis(6000))
+        try {
+            client.setPassiveNatWorkaroundStrategy { host }
+        } catch (_: Throwable) {}
         return client
     }
 
@@ -104,8 +109,9 @@ class FtpManager(
         var client: FTPClient? = null
         try {
             println("[FTP] Probando conexión con $host:$port...")
-            client = createClient(config)
+            client = createClient(config, host)
             client.connect(host, port)
+            client.soTimeout = 6000
 
             val reply = client.replyCode
             if (!FTPReply.isPositiveCompletion(reply)) {
@@ -146,8 +152,9 @@ class FtpManager(
         var client: FTPClient? = null
         try {
             println("[FTP] Conectando a $host:$port para listar '$effectivePath'...")
-            client = createClient(config)
+            client = createClient(config, host)
             client.connect(host, port)
+            client.soTimeout = 6000
 
             val reply = client.replyCode
             if (!FTPReply.isPositiveCompletion(reply)) {
@@ -174,21 +181,25 @@ class FtpManager(
                 println("[FTP] listFiles('$targetPath') -> ${files?.size ?: "null"}")
             } catch (e: Exception) {
                 println("[FTP] Error en listFiles('$targetPath'): ${e.message}")
+                try { client.completePendingCommand() } catch (_: Throwable) {}
             }
 
             // 2. Si files es nulo, probar con formato alternativo (ej. "" vs "/" para servidores relativos)
             if (files == null) {
+                try { client.completePendingCommand() } catch (_: Throwable) {}
                 try {
                     val altPath = if (targetPath == "/") "" else if (targetPath.startsWith("/")) targetPath.removePrefix("/") else "/$targetPath"
                     files = client.listFiles(altPath)
                     println("[FTP] listFiles('$altPath') -> ${files?.size ?: "null"}")
                 } catch (e: Exception) {
                     println("[FTP] Error en listFiles alternativo: ${e.message}")
+                    try { client.completePendingCommand() } catch (_: Throwable) {}
                 }
             }
 
             // 3. Si aún es nulo, probar cambiando de directorio de trabajo
             if (files == null) {
+                try { client.completePendingCommand() } catch (_: Throwable) {}
                 try {
                     if (client.changeWorkingDirectory(targetPath)) {
                         files = client.listFiles()
@@ -228,8 +239,9 @@ class FtpManager(
         if (config.isWebDav) return webDavManager.openStream(config, remotePath)
 
         val (host, port, _) = sanitizeHostAndPort(config)
-        val client = createClient(config)
+        val client = createClient(config, host)
         client.connect(host, port)
+        client.soTimeout = 15000
         val user = config.username.trim().ifBlank { "anonymous" }
         val loggedIn = client.login(user, config.password)
         if (!loggedIn) {
@@ -274,8 +286,9 @@ class FtpManager(
 
             destFile.parentFile?.mkdirs()
             val (host, port, _) = sanitizeHostAndPort(config)
-            val client = createClient(config)
+            val client = createClient(config, host)
             client.connect(host, port)
+            client.soTimeout = 15000
             val user = config.username.trim().ifBlank { "anonymous" }
             val loggedIn = client.login(user, config.password)
             if (!loggedIn) {
