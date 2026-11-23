@@ -4,6 +4,7 @@ import com.boumusic.desktop.model.Song
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,10 +24,21 @@ import kotlin.math.log10
 class AudioPlayer {
 
     private val scope = CoroutineScope(Dispatchers.IO)
-    private var playbackJob: Job? = null
+    private val lock = Any()
 
-    private var currentLine: SourceDataLine? = null
+    @Volatile
+    private var currentGeneration = 0L
+
+    @Volatile
+    private var activeLine: SourceDataLine? = null
+
+    @Volatile
+    private var activeStream: InputStream? = null
+
+    @Volatile
     private var isPaused = false
+
+    private var activeStreamProvider: (() -> InputStream)? = null
 
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
@@ -40,92 +52,166 @@ class AudioPlayer {
     private val _durationSec = MutableStateFlow(0L)
     val durationSec: StateFlow<Long> = _durationSec.asStateFlow()
 
-    private val _volume = MutableStateFlow(0.8f)
+    private val _volume = MutableStateFlow(0.85f)
     val volume: StateFlow<Float> = _volume.asStateFlow()
 
     var onSongFinished: (() -> Unit)? = null
 
-    fun play(song: Song, streamProvider: (() -> InputStream)? = null) {
-        stop()
+    fun play(song: Song, startFromSec: Long = 0L, streamProvider: (() -> InputStream)? = null) {
+        val generation: Long
+        synchronized(lock) {
+            generation = ++currentGeneration
+            activeStreamProvider = streamProvider
+            stopActiveLineAndStream()
+        }
+
         _currentSong.value = song
         _durationSec.value = if (song.duration > 0) song.duration / 1000 else 0L
-        _currentPositionSec.value = 0L
+        _currentPositionSec.value = startFromSec
         isPaused = false
 
-        playbackJob = scope.launch {
-            var rawStream: InputStream? = null
-            var inStream: AudioInputStream? = null
-            var decodedStream: AudioInputStream? = null
-            var line: SourceDataLine? = null
+        scope.launch {
+            startPlaybackWorker(generation, song, streamProvider, startFromSec)
+        }
+    }
 
-            try {
-                rawStream = if (streamProvider != null) {
-                    streamProvider()
-                } else {
-                    FileInputStream(File(song.path))
+    private fun startPlaybackWorker(
+        generation: Long,
+        song: Song,
+        streamProvider: (() -> InputStream)?,
+        startFromSec: Long
+    ) {
+        var rawStream: InputStream? = null
+        var inStream: AudioInputStream? = null
+        var decodedStream: AudioInputStream? = null
+        var line: SourceDataLine? = null
+
+        try {
+            if (generation != currentGeneration) return
+
+            rawStream = if (streamProvider != null) {
+                streamProvider()
+            } else {
+                val f = File(song.path)
+                if (!f.exists()) return
+                FileInputStream(f)
+            }
+
+            synchronized(lock) {
+                if (generation != currentGeneration) {
+                    try { rawStream.close() } catch (ignored: Exception) {}
+                    return
+                }
+                activeStream = rawStream
+            }
+
+            val buffered = BufferedInputStream(rawStream, 128 * 1024)
+            inStream = AudioSystem.getAudioInputStream(buffered)
+            val baseFormat = inStream.format
+
+            val sampleRate = if (baseFormat.sampleRate > 0) baseFormat.sampleRate else 44100.0f
+            val channels = if (baseFormat.channels > 0) baseFormat.channels else 2
+
+            val decodedFormat = AudioFormat(
+                AudioFormat.Encoding.PCM_SIGNED,
+                sampleRate,
+                16,
+                channels,
+                channels * 2,
+                sampleRate,
+                false
+            )
+
+            decodedStream = AudioSystem.getAudioInputStream(decodedFormat, inStream)
+
+            val info = DataLine.Info(SourceDataLine::class.java, decodedFormat)
+            if (!AudioSystem.isLineSupported(info)) {
+                return
+            }
+
+            line = AudioSystem.getLine(info) as SourceDataLine
+
+            // Búfer amplio (~750ms de audio) para evitar cualquier tipo de corte o "ralladura" por buffer underrun
+            val lineBufferSize = (sampleRate * channels * 2 * 0.75).toInt().coerceAtLeast(65536)
+            line.open(decodedFormat, lineBufferSize)
+            line.start()
+
+            synchronized(lock) {
+                if (generation != currentGeneration) {
+                    try {
+                        line.stop()
+                        line.close()
+                    } catch (ignored: Exception) {}
+                    return
+                }
+                activeLine = line
+            }
+
+            applyVolumeToLine(line, _volume.value)
+            _isPlaying.value = true
+
+            val bytesPerSecond = (sampleRate * channels * 2).toLong()
+
+            // Si hay que posicionarse en un segundo concreto (seek)
+            if (startFromSec > 0 && bytesPerSecond > 0) {
+                val bytesToSkip = startFromSec * bytesPerSecond
+                var skipped = 0L
+                while (skipped < bytesToSkip && generation == currentGeneration) {
+                    val s = decodedStream.skip(bytesToSkip - skipped)
+                    if (s <= 0) break
+                    skipped += s
+                }
+            }
+
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            var totalBytesRead = if (startFromSec > 0) startFromSec * bytesPerSecond else 0L
+            var naturalEof = false
+
+            while (generation == currentGeneration && line.isOpen) {
+                if (isPaused) {
+                    Thread.sleep(50)
+                    continue
                 }
 
-                val buffered = BufferedInputStream(rawStream, 64 * 1024)
-                inStream = AudioSystem.getAudioInputStream(buffered)
-                val baseFormat = inStream.format
-
-                val decodedFormat = AudioFormat(
-                    AudioFormat.Encoding.PCM_SIGNED,
-                    baseFormat.sampleRate,
-                    16,
-                    baseFormat.channels,
-                    baseFormat.channels * 2,
-                    baseFormat.sampleRate,
-                    false
-                )
-
-                decodedStream = AudioSystem.getAudioInputStream(decodedFormat, inStream)
-                val info = DataLine.Info(SourceDataLine::class.java, decodedFormat)
-                line = AudioSystem.getLine(info) as SourceDataLine
-                line.open(decodedFormat)
-                line.start()
-                currentLine = line
-
-                applyVolumeToLine(line, _volume.value)
-                _isPlaying.value = true
-
-                val buffer = ByteArray(4096)
-                var bytesRead: Int
-                var totalBytesRead = 0L
-                val bytesPerSecond = decodedFormat.sampleRate * decodedFormat.frameSize
-
-                while (line.isOpen) {
-                    if (isPaused) {
-                        Thread.sleep(100)
-                        continue
-                    }
-
-                    bytesRead = decodedStream.read(buffer, 0, buffer.size)
-                    if (bytesRead == -1) break
-
-                    line.write(buffer, 0, bytesRead)
-                    totalBytesRead += bytesRead
-
-                    if (bytesPerSecond > 0) {
-                        val currentSec = totalBytesRead / bytesPerSecond.toLong()
-                        _currentPositionSec.value = currentSec
-                    }
+                bytesRead = decodedStream.read(buffer, 0, buffer.size)
+                if (bytesRead == -1) {
+                    naturalEof = true
+                    break
                 }
 
+                line.write(buffer, 0, bytesRead)
+                totalBytesRead += bytesRead
+
+                if (bytesPerSecond > 0) {
+                    val currentSec = totalBytesRead / bytesPerSecond
+                    _currentPositionSec.value = currentSec
+                }
+            }
+
+            if (generation == currentGeneration && naturalEof && !isPaused) {
                 line.drain()
                 _isPlaying.value = false
-                if (!isPaused) {
-                    onSongFinished?.invoke()
-                }
-            } catch (e: Exception) {
+                onSongFinished?.invoke()
+            }
+        } catch (e: Exception) {
+            // Error silencioso si fue cancelado intencionalmente
+            if (generation == currentGeneration) {
                 e.printStackTrace()
                 _isPlaying.value = false
-            } finally {
-                try { line?.close() } catch (ignored: Exception) {}
-                try { decodedStream?.close() } catch (ignored: Exception) {}
-                try { inStream?.close() } catch (ignored: Exception) {}
-                try { rawStream?.close() } catch (ignored: Exception) {}
-                currentLine = null
+            }
+        } finally {
+            try { line?.stop() } catch (ignored: Exception) {}
+            try { line?.close() } catch (ignored: Exception) {}
+            try { decodedStream?.close() } catch (ignored: Exception) {}
+            try { inStream?.close() } catch (ignored: Exception) {}
+            try { rawStream?.close() } catch (ignored: Exception) {}
+
+            synchronized(lock) {
+                if (generation == currentGeneration) {
+                    activeLine = null
+                    activeStream = null
+                }
             }
         }
     }
@@ -134,15 +220,19 @@ class AudioPlayer {
         if (_isPlaying.value) {
             isPaused = true
             _isPlaying.value = false
-            currentLine?.stop()
+            try {
+                activeLine?.stop()
+            } catch (ignored: Exception) {}
         }
     }
 
     fun resume() {
-        if (isPaused && currentLine != null) {
+        if (isPaused && activeLine != null) {
             isPaused = false
             _isPlaying.value = true
-            currentLine?.start()
+            try {
+                activeLine?.start()
+            } catch (ignored: Exception) {}
         }
     }
 
@@ -151,26 +241,46 @@ class AudioPlayer {
             pause()
         } else if (isPaused) {
             resume()
+        } else {
+            _currentSong.value?.let { play(it, startFromSec = 0L, streamProvider = activeStreamProvider) }
         }
     }
 
     fun stop() {
-        isPaused = false
+        synchronized(lock) {
+            currentGeneration++
+            isPaused = false
+            stopActiveLineAndStream()
+        }
         _isPlaying.value = false
         _currentPositionSec.value = 0L
-        playbackJob?.cancel()
-        playbackJob = null
-        try {
-            currentLine?.stop()
-            currentLine?.close()
-        } catch (ignored: Exception) {}
-        currentLine = null
+    }
+
+    fun seekTo(seconds: Long) {
+        val song = _currentSong.value ?: return
+        val clampedSec = seconds.coerceIn(0L, _durationSec.value.coerceAtLeast(100L))
+        _currentPositionSec.value = clampedSec
+        play(song, startFromSec = clampedSec, streamProvider = activeStreamProvider)
     }
 
     fun setVolume(vol: Float) {
         val clamped = vol.coerceIn(0f, 1f)
         _volume.value = clamped
-        currentLine?.let { applyVolumeToLine(it, clamped) }
+        activeLine?.let { applyVolumeToLine(it, clamped) }
+    }
+
+    private fun stopActiveLineAndStream() {
+        try {
+            activeLine?.stop()
+            activeLine?.flush()
+            activeLine?.close()
+        } catch (ignored: Exception) {}
+        activeLine = null
+
+        try {
+            activeStream?.close()
+        } catch (ignored: Exception) {}
+        activeStream = null
     }
 
     private fun applyVolumeToLine(line: SourceDataLine, vol: Float) {
@@ -183,7 +293,7 @@ class AudioPlayer {
                 gainControl.value = dB
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            // Ignorado si el controlador de hardware no soporta control de ganancia directo
         }
     }
 }

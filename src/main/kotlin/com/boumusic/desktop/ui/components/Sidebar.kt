@@ -118,6 +118,15 @@ fun Sidebar(
         Spacer(modifier = Modifier.height(6.dp))
 
         SidebarItem(
+            title = "Cola de reproducción",
+            icon = Icons.Default.MusicNote,
+            isSelected = currentSection == DesktopSection.QUEUE,
+            onClick = { viewModel.setSection(DesktopSection.QUEUE) }
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        SidebarItem(
             title = "Servidores (SMB / FTP)",
             icon = Icons.Default.Dns,
             isSelected = currentSection == DesktopSection.SERVERS,

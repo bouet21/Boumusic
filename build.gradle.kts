@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.boumusic.desktop"
-version = "0.1.1-beta"
+version = "0.1.2-beta"
 
 repositories {
     mavenCentral()
@@ -17,6 +17,7 @@ repositories {
 
 dependencies {
     implementation(compose.desktop.currentOs)
+    implementation(compose.desktop.linux_x64)
     implementation(compose.material3)
     implementation(compose.materialIconsExtended)
     implementation(compose.components.resources)
@@ -30,11 +31,12 @@ dependencies {
     // WebDAV y HTTP
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // Audio: decodificadores Java Sound nativos (MP3, OGG Vorbis, WAV)
+    // Audio: decodificadores Java Sound nativos (MP3, OGG Vorbis, WAV, FLAC)
     implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
     implementation("com.googlecode.soundlibs:tritonus-share:0.3.7.4")
     implementation("com.googlecode.soundlibs:vorbisspi:1.0.3.3")
     implementation("com.googlecode.soundlibs:jlayer:1.0.1.4")
+    implementation("org.jflac:jflac-codec:1.5.2")
 
     // JSON para sincronización y backup con Boumusic Android
     implementation("org.json:json:20240303")

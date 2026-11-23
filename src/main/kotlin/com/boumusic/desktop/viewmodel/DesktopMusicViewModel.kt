@@ -13,11 +13,14 @@ import com.boumusic.desktop.sync.NetworkDevice
 import com.boumusic.desktop.sync.NetworkSyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -26,8 +29,22 @@ import java.util.UUID
 enum class DesktopSection(val title: String) {
     LIBRARY("Biblioteca"),
     PLAYLISTS("Listas"),
+    QUEUE("Cola de reproducción"),
     SERVERS("Servidores (SMB / FTP)"),
     BACKUP("Sincronización & Backup")
+}
+
+enum class RepeatMode(val label: String) {
+    OFF("Desactivado"),
+    ALL("Repetir todo"),
+    ONE("Repetir una")
+}
+
+enum class LibrarySubTab(val title: String) {
+    ALL_SONGS("Canciones"),
+    ARTISTS("Artistas"),
+    ALBUMS("Álbumes"),
+    GENRES("Géneros")
 }
 
 class DesktopMusicViewModel(
@@ -44,6 +61,26 @@ class DesktopMusicViewModel(
     fun setSection(section: DesktopSection) {
         _currentSection.value = section
     }
+
+    // SUB-PESTAÑAS DE BIBLIOTECA
+    private val _librarySubTab = MutableStateFlow(LibrarySubTab.ALL_SONGS)
+    val librarySubTab: StateFlow<LibrarySubTab> = _librarySubTab.asStateFlow()
+
+    fun setLibrarySubTab(tab: LibrarySubTab) {
+        _librarySubTab.value = tab
+    }
+
+    private val _selectedArtist = MutableStateFlow<String?>(null)
+    val selectedArtist: StateFlow<String?> = _selectedArtist.asStateFlow()
+    fun selectArtist(artist: String?) { _selectedArtist.value = artist }
+
+    private val _selectedAlbum = MutableStateFlow<String?>(null)
+    val selectedAlbum: StateFlow<String?> = _selectedAlbum.asStateFlow()
+    fun selectAlbum(album: String?) { _selectedAlbum.value = album }
+
+    private val _selectedGenre = MutableStateFlow<String?>(null)
+    val selectedGenre: StateFlow<String?> = _selectedGenre.asStateFlow()
+    fun selectGenre(genre: String?) { _selectedGenre.value = genre }
 
     // BIBLIOTECA LOCAL
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
@@ -63,28 +100,78 @@ class DesktopMusicViewModel(
         _sortOrder.value = order
     }
 
+    private data class LibraryFilterParams(
+        val query: String,
+        val sort: SongSortOrder,
+        val artist: String?,
+        val album: String?,
+        val genre: String?
+    )
+
+    private val _filterParams = combine(
+        _searchQuery,
+        _sortOrder,
+        _selectedArtist,
+        _selectedAlbum,
+        _selectedGenre
+    ) { query, sort, artist, album, genre ->
+        LibraryFilterParams(query, sort, artist, album, genre)
+    }
+
     val filteredSongs: StateFlow<List<Song>> = combine(
         _songs,
-        _searchQuery,
-        _sortOrder
-    ) { songList, query, sort ->
-        val filtered = if (query.isBlank()) {
-            songList
+        _filterParams
+    ) { songList, filters ->
+        var list = songList
+
+        // Filtro por artista si hay uno seleccionado
+        if (filters.artist != null) {
+            list = list.filter { it.artist.equals(filters.artist, ignoreCase = true) }
+        }
+        // Filtro por álbum si hay uno seleccionado
+        if (filters.album != null) {
+            list = list.filter { it.album.equals(filters.album, ignoreCase = true) }
+        }
+        // Filtro por género si hay uno seleccionado
+        if (filters.genre != null) {
+            list = list.filter { it.genre.equals(filters.genre, ignoreCase = true) }
+        }
+
+        val filtered = if (filters.query.isBlank()) {
+            list
         } else {
-            val q = query.lowercase().trim()
-            songList.filter {
+            val q = filters.query.lowercase().trim()
+            list.filter {
                 it.title.lowercase().contains(q) ||
                 it.artist.lowercase().contains(q) ||
                 it.album.lowercase().contains(q)
             }
         }
-        when (sort) {
+        when (filters.sort) {
             SongSortOrder.DEFAULT -> filtered
             SongSortOrder.TITLE_ASC -> filtered.sortedBy { it.title.lowercase() }
             SongSortOrder.ARTIST_ASC -> filtered.sortedWith(compareBy({ it.artist.lowercase() }, { it.title.lowercase() }))
             SongSortOrder.DURATION_DESC -> filtered.sortedByDescending { it.duration }
             SongSortOrder.RECENT -> filtered.sortedByDescending { it.id }
         }
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val artists: StateFlow<List<Pair<String, Int>>> = _songs.map { list ->
+        list.groupBy { it.artist.ifBlank { "Desconocido" } }
+            .map { (artist, sList) -> artist to sList.size }
+            .sortedBy { it.first.lowercase() }
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val albums: StateFlow<List<Pair<String, Int>>> = _songs.map { list ->
+        list.groupBy { it.album.ifBlank { "Varios" } }
+            .map { (album, sList) -> album to sList.size }
+            .sortedBy { it.first.lowercase() }
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val genres: StateFlow<List<Pair<String, Int>>> = _songs.map { list ->
+        list.groupBy { it.genre.ifBlank { "General" } }
+            .map { (genre, sList) -> genre to sList.size }
+            .sortedBy { it.first.lowercase() }
     }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // COLA Y REPRODUCCIÓN
@@ -95,49 +182,143 @@ class DesktopMusicViewModel(
     private val _isShuffle = MutableStateFlow(false)
     val isShuffle: StateFlow<Boolean> = _isShuffle.asStateFlow()
 
+    private val _repeatMode = MutableStateFlow(RepeatMode.OFF)
+    val repeatMode: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
+
     fun toggleShuffle() {
         _isShuffle.value = !_isShuffle.value
+    }
+
+    fun toggleRepeatMode() {
+        _repeatMode.value = when (_repeatMode.value) {
+            RepeatMode.OFF -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.OFF
+        }
     }
 
     fun playSong(song: Song, queue: List<Song> = emptyList()) {
         _playbackQueue.value = if (queue.isNotEmpty()) queue else _songs.value
         currentIndex = _playbackQueue.value.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-        player.play(song)
+        playSongInternal(song)
     }
 
-    fun playNext() {
-        val q = _playbackQueue.value
-        if (q.isEmpty()) return
-        currentIndex = if (_isShuffle.value) {
-            (0 until q.size).random()
-        } else {
-            (currentIndex + 1) % q.size
-        }
-        val nextSong = q.getOrNull(currentIndex) ?: return
-        if (nextSong.isRemote) {
+    private fun playSongInternal(song: Song) {
+        if (song.isRemote) {
             val config = _activeServer.value
             if (config != null) {
-                player.play(nextSong) { ftpManager.openStream(config, nextSong.remotePath) }
+                player.play(song, startFromSec = 0L) { ftpManager.openStream(config, song.remotePath) }
             }
         } else {
-            player.play(nextSong)
+            player.play(song, startFromSec = 0L)
         }
+    }
+
+    fun playNext(fromUser: Boolean = false) {
+        val q = _playbackQueue.value
+        if (q.isEmpty()) return
+
+        if (!fromUser && _repeatMode.value == RepeatMode.ONE) {
+            val sameSong = q.getOrNull(currentIndex) ?: return
+            playSongInternal(sameSong)
+            return
+        }
+
+        if (_isShuffle.value) {
+            currentIndex = (0 until q.size).random()
+        } else {
+            if (currentIndex + 1 >= q.size) {
+                if (_repeatMode.value == RepeatMode.ALL || fromUser) {
+                    currentIndex = 0
+                } else {
+                    player.stop()
+                    return
+                }
+            } else {
+                currentIndex++
+            }
+        }
+        val nextSong = q.getOrNull(currentIndex) ?: return
+        playSongInternal(nextSong)
     }
 
     fun playPrevious() {
         val q = _playbackQueue.value
         if (q.isEmpty()) return
-        currentIndex = (currentIndex - 1 + q.size) % q.size
+        currentIndex = if (currentIndex - 1 < 0) q.size - 1 else currentIndex - 1
         val prevSong = q.getOrNull(currentIndex) ?: return
-        if (prevSong.isRemote) {
-            val config = _activeServer.value
-            if (config != null) {
-                player.play(prevSong) { ftpManager.openStream(config, prevSong.remotePath) }
-            }
-        } else {
-            player.play(prevSong)
+        playSongInternal(prevSong)
+    }
+
+    fun playSongAtQueueIndex(index: Int) {
+        val q = _playbackQueue.value
+        if (index in q.indices) {
+            currentIndex = index
+            val song = q[index]
+            playSongInternal(song)
         }
     }
+
+    fun addToQueue(song: Song) {
+        _playbackQueue.value = _playbackQueue.value + song
+    }
+
+    fun playNextInQueue(song: Song) {
+        val current = _playbackQueue.value.toMutableList()
+        val insertIdx = (currentIndex + 1).coerceAtMost(current.size)
+        current.add(insertIdx, song)
+        _playbackQueue.value = current
+    }
+
+    fun removeFromQueue(index: Int) {
+        val current = _playbackQueue.value.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            _playbackQueue.value = current
+            if (index < currentIndex) {
+                currentIndex = (currentIndex - 1).coerceAtLeast(0)
+            }
+        }
+    }
+
+    fun clearQueue() {
+        _playbackQueue.value = emptyList()
+        currentIndex = 0
+        player.stop()
+    }
+
+    fun seekTo(seconds: Long) {
+        player.seekTo(seconds)
+    }
+
+    // TEMPORIZADOR DE APAGADO (SLEEP TIMER)
+    private var sleepTimerJob: Job? = null
+    private val _sleepTimerMinutes = MutableStateFlow<Int?>(null)
+    val sleepTimerMinutes: StateFlow<Int?> = _sleepTimerMinutes.asStateFlow()
+
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes <= 0) {
+            _sleepTimerMinutes.value = null
+            return
+        }
+        _sleepTimerMinutes.value = minutes
+        sleepTimerJob = scope.launch {
+            var rem = minutes
+            while (rem > 0) {
+                delay(60000L)
+                rem--
+                _sleepTimerMinutes.value = if (rem > 0) rem else null
+            }
+            player.pause()
+            _sleepTimerMinutes.value = null
+        }
+    }
+
+    // DIÁLOGOS GLOBALES
+    val showSleepTimerDialog = MutableStateFlow(false)
+    val showSongDetailsDialog = MutableStateFlow<Song?>(null)
+    val showAddToPlaylistDialog = MutableStateFlow<Song?>(null)
 
     // SERVIDORES REMOTOS (SMB / FTP / WebDAV)
     private val _savedServers = MutableStateFlow<List<FtpConfig>>(emptyList())
@@ -215,7 +396,7 @@ class DesktopMusicViewModel(
         }
         _playbackQueue.value = audios
         currentIndex = audios.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-        player.play(song) {
+        player.play(song, startFromSec = 0L) {
             ftpManager.openStream(config, item.path)
         }
     }
@@ -372,7 +553,7 @@ class DesktopMusicViewModel(
     fun syncWithDevice(device: NetworkDevice) = syncManager.syncWithDevice(device)
 
     init {
-        player.onSongFinished = { playNext() }
+        player.onSongFinished = { playNext(fromUser = false) }
         // Carga ultra-rápida desde caché local para arranque instantáneo (< 2ms)
         val cached = repository.loadCachedSongs()
         _songs.value = cached

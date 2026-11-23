@@ -6,4 +6,7 @@ data class Playlist(
     val songIds: List<Long>,
     val remoteSongs: List<Song> = emptyList(),
     val createdAt: Long = System.currentTimeMillis()
-)
+) {
+    val songCount: Int
+        get() = songIds.size + remoteSongs.size
+}

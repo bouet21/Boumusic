@@ -14,24 +14,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.boumusic.desktop.ui.components.AddToPlaylistDialog
 import com.boumusic.desktop.ui.components.PlayerBar
 import com.boumusic.desktop.ui.components.Sidebar
+import com.boumusic.desktop.ui.components.SleepTimerDialog
+import com.boumusic.desktop.ui.components.SongDetailsDialog
 import com.boumusic.desktop.ui.screens.BackupScreen
 import com.boumusic.desktop.ui.screens.LibraryScreen
 import com.boumusic.desktop.ui.screens.PlaylistsScreen
+import com.boumusic.desktop.ui.screens.QueueScreen
 import com.boumusic.desktop.ui.screens.ServersScreen
 import com.boumusic.desktop.ui.theme.BoumusicDesktopTheme
 import com.boumusic.desktop.viewmodel.DesktopMusicViewModel
 import com.boumusic.desktop.viewmodel.DesktopSection
 
 fun main() = application {
-    val windowState = rememberWindowState(width = 1120.dp, height = 740.dp)
+    val windowState = rememberWindowState(width = 1140.dp, height = 760.dp)
     val viewModel = remember { DesktopMusicViewModel() }
     val currentSection by viewModel.currentSection.collectAsState()
 
+    val showSleepTimer by viewModel.showSleepTimerDialog.collectAsState()
+    val songDetails by viewModel.showSongDetailsDialog.collectAsState()
+    val songToAddToPlaylist by viewModel.showAddToPlaylistDialog.collectAsState()
+
     Window(
         onCloseRequest = ::exitApplication,
-        title = "Boumusic Desktop — v0.1.0-beta",
+        title = "Boumusic Desktop — v0.1.2-beta (Windows / Linux)",
         state = windowState
     ) {
         BoumusicDesktopTheme {
@@ -57,10 +65,34 @@ fun main() = application {
                         when (currentSection) {
                             DesktopSection.LIBRARY -> LibraryScreen(viewModel = viewModel)
                             DesktopSection.PLAYLISTS -> PlaylistsScreen(viewModel = viewModel)
+                            DesktopSection.QUEUE -> QueueScreen(viewModel = viewModel)
                             DesktopSection.SERVERS -> ServersScreen(viewModel = viewModel)
                             DesktopSection.BACKUP -> BackupScreen(viewModel = viewModel)
                         }
                     }
+                }
+
+                // Diálogos modales globales
+                if (showSleepTimer) {
+                    SleepTimerDialog(
+                        viewModel = viewModel,
+                        onDismiss = { viewModel.showSleepTimerDialog.value = false }
+                    )
+                }
+
+                songDetails?.let { s ->
+                    SongDetailsDialog(
+                        song = s,
+                        onDismiss = { viewModel.showSongDetailsDialog.value = null }
+                    )
+                }
+
+                songToAddToPlaylist?.let { s ->
+                    AddToPlaylistDialog(
+                        song = s,
+                        viewModel = viewModel,
+                        onDismiss = { viewModel.showAddToPlaylistDialog.value = null }
+                    )
                 }
             }
         }
