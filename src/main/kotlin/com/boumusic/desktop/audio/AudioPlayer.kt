@@ -78,7 +78,9 @@ class AudioPlayer {
         }
 
         _currentSong.value = song
-        _durationSec.value = if (song.duration > 0) song.duration / 1000 else 0L
+        if (song.duration in 1..86400000) {
+            _durationSec.value = song.duration / 1000L
+        }
         _currentPositionSec.value = startFromSec
         isPaused = false
 
@@ -120,40 +122,26 @@ class AudioPlayer {
 
             val buffered = BufferedInputStream(rawStream, 256 * 1024)
 
-            // Detección dinámica de duración desde cabecera de audio (MP3, FLAC, WAV, OGG)
-            var detectedDurationSec = 0L
-            try {
-                buffered.mark(256 * 1024)
-                val fileFormat = AudioSystem.getAudioFileFormat(buffered)
-                val props = fileFormat.properties()
-                val microSec = (props?.get("duration") as? Number)?.toLong()
-                    ?: (props?.get("mp3.duration.microseconds") as? Number)?.toLong()
-                if (microSec != null && microSec > 0) {
-                    detectedDurationSec = microSec / 1_000_000L
-                } else if (fileFormat.frameLength > 0 && fileFormat.format.frameRate > 0) {
-                    detectedDurationSec = (fileFormat.frameLength / fileFormat.format.frameRate).toLong()
-                }
-                buffered.reset()
-            } catch (_: Throwable) {
-                try { buffered.reset() } catch (_: Throwable) {}
-            }
+            // Detección precisa de duración desde cabecera de audio (MP3, FLAC, WAV)
+            val localFileSize = if (!song.isRemote) File(song.path).takeIf { it.exists() }?.length() ?: 0L else 0L
+            var detectedDurationSec = AudioMetadataHelper.detectDurationSec(buffered, localFileSize)
 
             inStream = AudioSystem.getAudioInputStream(buffered)
             val baseFormat = inStream.format
 
-            if (detectedDurationSec <= 0) {
+            if (detectedDurationSec <= 0L) {
                 if (inStream.frameLength > 0 && baseFormat.frameRate > 0) {
                     detectedDurationSec = (inStream.frameLength / baseFormat.frameRate).toLong()
                 }
             }
 
-            if (detectedDurationSec <= 0 && song.duration > 0) {
-                detectedDurationSec = song.duration / 1000
+            if (detectedDurationSec <= 0L && song.duration in 1..86400000) {
+                detectedDurationSec = song.duration / 1000L
             }
 
-            if (detectedDurationSec > 0) {
+            if (detectedDurationSec > 0L) {
                 _durationSec.value = detectedDurationSec
-                _currentSong.value = _currentSong.value?.takeIf { it.id == song.id }?.copy(duration = detectedDurationSec * 1000)
+                _currentSong.value = _currentSong.value?.takeIf { it.id == song.id }?.copy(duration = detectedDurationSec * 1000L)
             }
 
             val sampleRate = if (baseFormat.sampleRate > 0) baseFormat.sampleRate else 44100.0f
@@ -212,10 +200,12 @@ class AudioPlayer {
             if (startFromSec > 0 && bytesPerSecond > 0) {
                 val bytesToSkip = startFromSec * bytesPerSecond
                 var skipped = 0L
+                val skipBuf = ByteArray(8192)
                 while (skipped < bytesToSkip && generation == currentGeneration) {
-                    val s = decodedStream.skip(bytesToSkip - skipped)
-                    if (s <= 0) break
-                    skipped += s
+                    val toRead = (bytesToSkip - skipped).coerceAtMost(skipBuf.size.toLong()).toInt()
+                    val r = decodedStream.read(skipBuf, 0, toRead)
+                    if (r <= 0) break
+                    skipped += r
                 }
             }
 

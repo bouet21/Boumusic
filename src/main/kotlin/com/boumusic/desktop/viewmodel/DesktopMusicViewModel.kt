@@ -395,12 +395,13 @@ class DesktopMusicViewModel(
     fun playRemoteSong(item: FtpItem) {
         val config = _activeServer.value ?: return
         val audios = _serverItems.value.filter { it.isAudio }.map {
+            val estimatedMs = if (it.size > 1024L) (it.size * 1000L) / 24000L else 0L
             Song(
                 id = it.path.hashCode().toLong(),
                 title = it.name.substringBeforeLast("."),
                 artist = config.name,
                 album = config.protocolLabel,
-                duration = if (it.size > 0) it.size else 0L,
+                duration = estimatedMs,
                 path = it.path,
                 isRemote = true,
                 remoteHost = config.host,
@@ -417,12 +418,13 @@ class DesktopMusicViewModel(
     fun playAllRemote(items: List<FtpItem>, shuffle: Boolean = false) {
         val config = _activeServer.value ?: return
         val audioSongs = items.filter { it.isAudio }.map {
+            val estimatedMs = if (it.size > 1024L) (it.size * 1000L) / 24000L else 0L
             Song(
                 id = it.path.hashCode().toLong(),
                 title = it.name.substringBeforeLast("."),
                 artist = config.name,
                 album = config.protocolLabel,
-                duration = if (it.size > 0) it.size else 0L,
+                duration = estimatedMs,
                 path = it.path,
                 isRemote = true,
                 remoteHost = config.host,

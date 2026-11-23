@@ -90,7 +90,7 @@ fun Sidebar(
                     color = TextPrimary
                 )
                 Text(
-                    text = "PC Desktop v1.0.2",
+                    text = "PC Desktop v1.0.3",
                     fontSize = 10.sp,
                     color = NeonCyan,
                     fontWeight = FontWeight.SemiBold

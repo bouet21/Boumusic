@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.boumusic.desktop"
-version = "1.0.2"
+version = "1.0.3"
 
 repositories {
     mavenCentral()
@@ -67,7 +67,7 @@ compose.desktop {
                 TargetFormat.Deb
             )
             packageName = "Boumusic"
-            packageVersion = "1.0.2"
+            packageVersion = "1.0.3"
             description = "Boumusic Desktop - Reproductor de Música Moderno y Ligero para Windows y Linux"
             vendor = "Boumusic"
             copyright = "© 2026 Boumusic"
@@ -94,4 +94,8 @@ compose.desktop {
             }
         }
     }
+}
+
+tasks.withType<Jar> {
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }

@@ -175,31 +175,50 @@ fun PlayerBar(
                 }
             }
 
+            var isDraggingProgress by remember { mutableStateOf(false) }
+            var dragProgressSec by remember { mutableStateOf(0f) }
+
             // Barra de progreso interactiva con búsqueda (Seek)
             Row(
                 modifier = Modifier.fillMaxWidth(0.92f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val currentDisplayPos = if (isDraggingProgress) dragProgressSec.toLong() else positionSec
                 Text(
-                    text = formatPos(positionSec, durationSec),
+                    text = formatPos(currentDisplayPos, durationSec),
                     color = TextSecondary,
                     fontSize = 11.sp
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                val maxRange = if (durationSec > 0) durationSec.toFloat() else 100f
-                val currentProgress = positionSec.toFloat().coerceIn(0f, maxRange)
+                val maxRange = if (durationSec > 0) durationSec.toFloat() else 1f
+                val currentProgress = if (isDraggingProgress) {
+                    dragProgressSec.coerceIn(0f, maxRange)
+                } else {
+                    positionSec.toFloat().coerceIn(0f, maxRange)
+                }
 
                 Slider(
                     value = currentProgress,
                     onValueChange = { newSec ->
-                        viewModel.seekTo(newSec.toLong())
+                        isDraggingProgress = true
+                        dragProgressSec = newSec
+                    },
+                    onValueChangeFinished = {
+                        if (durationSec > 0) {
+                            viewModel.seekTo(dragProgressSec.toLong())
+                        }
+                        isDraggingProgress = false
                     },
                     valueRange = 0f..maxRange,
+                    enabled = durationSec > 0,
                     modifier = Modifier.weight(1f).height(12.dp),
                     colors = SliderDefaults.colors(
                         thumbColor = NeonCyan,
                         activeTrackColor = NeonCyan,
-                        inactiveTrackColor = DarkCardBorder
+                        inactiveTrackColor = DarkCardBorder,
+                        disabledThumbColor = TextMuted,
+                        disabledActiveTrackColor = DarkCardBorder,
+                        disabledInactiveTrackColor = DarkCardBorder
                     )
                 )
                 Spacer(modifier = Modifier.width(8.dp))

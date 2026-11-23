@@ -1,5 +1,6 @@
 package com.boumusic.desktop.data
 
+import com.boumusic.desktop.audio.AudioMetadataHelper
 import com.boumusic.desktop.model.FtpConfig
 import com.boumusic.desktop.model.Playlist
 import com.boumusic.desktop.model.Song
@@ -98,13 +99,14 @@ class MusicRepository {
                     val artist = if (parts.size == 2) parts[0].trim() else file.parentFile?.name ?: "Artista"
                     val title = if (parts.size == 2) parts[1].trim() else baseName
 
+                    val durationMs = AudioMetadataHelper.detectFileDurationMs(file)
                     songs.add(
                         Song(
                             id = file.absolutePath.hashCode().toLong(),
                             title = title,
                             artist = artist,
                             album = file.parentFile?.name ?: "Álbum",
-                            duration = 0L,
+                            duration = durationMs,
                             path = file.absolutePath,
                             isRemote = false
                         )
