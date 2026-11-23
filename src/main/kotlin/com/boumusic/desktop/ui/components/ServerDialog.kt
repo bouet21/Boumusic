@@ -228,28 +228,6 @@ fun ServerDialog(
                     )
                 }
 
-                if (!isSmb && !isWebDav) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text("Puertos comunes:", color = TextSecondary, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
-                        FilterChip(
-                            selected = portStr == "21",
-                            onClick = { portStr = "21" },
-                            label = { Text("21 (PC/NAS)", fontSize = 10.sp) },
-                            colors = chipColors()
-                        )
-                        FilterChip(
-                            selected = portStr == "2121",
-                            onClick = { portStr = "2121" },
-                            label = { Text("2121 (Móvil)", fontSize = 10.sp) },
-                            colors = chipColors()
-                        )
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(

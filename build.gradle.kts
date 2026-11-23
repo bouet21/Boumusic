@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.boumusic.desktop"
-version = "0.1.6-beta"
+version = "0.1.7-beta"
 
 repositories {
     mavenCentral()

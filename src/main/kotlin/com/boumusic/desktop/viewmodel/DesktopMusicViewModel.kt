@@ -359,23 +359,13 @@ class DesktopMusicViewModel(
         _isServerLoading.value = true
         _serverError.value = null
         scope.launch(Dispatchers.IO) {
-            try {
-                withTimeout(18000L) {
-                    val result = ftpManager.listDirectory(config, path)
-                    result.onSuccess { items ->
-                        _serverItems.value = items
-                        _serverPath.value = path
-                        _isServerLoading.value = false
-                    }.onFailure { err ->
-                        _serverError.value = err.message ?: "Error al conectar al servidor"
-                        _isServerLoading.value = false
-                    }
-                }
-            } catch (e: TimeoutCancellationException) {
-                _serverError.value = "Tiempo de espera agotado al conectar a ${config.host}:${config.port}. Compruebe que ambos dispositivos estén en la misma red Wi-Fi y que el servidor FTP esté activo."
+            val result = ftpManager.listDirectory(config, path)
+            result.onSuccess { items ->
+                _serverItems.value = items
+                _serverPath.value = path
                 _isServerLoading.value = false
-            } catch (e: Exception) {
-                _serverError.value = e.message ?: "Error inesperado de conexión"
+            }.onFailure { err ->
+                _serverError.value = err.message ?: "Error al conectar al servidor"
                 _isServerLoading.value = false
             }
         }

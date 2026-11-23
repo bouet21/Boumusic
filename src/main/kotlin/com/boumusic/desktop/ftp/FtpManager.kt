@@ -118,11 +118,6 @@ class FtpManager(
             client.connect(host, port)
             log("testConnection: Conectado. Reply: ${client.replyCode} - ${client.replyString.trim()}")
 
-            val reply = client.replyCode
-            if (!FTPReply.isPositiveCompletion(reply)) {
-                return@withContext Result.failure(Exception("El servidor FTP rechazó la conexión (Código: $reply)"))
-            }
-
             val user = config.username.trim().ifBlank { "anonymous" }
             val pass = config.password
             log("testConnection: Intentando login con usuario '$user'...")
@@ -134,7 +129,7 @@ class FtpManager(
 
             configurePostLogin(client)
             client.enterLocalPassiveMode()
-            try { client.logout() } catch (_: Exception) {}
+            try { client.disconnect() } catch (_: Exception) {}
             log("testConnection: Éxito total")
             Result.success(true)
         } catch (e: Exception) {
@@ -161,11 +156,6 @@ class FtpManager(
             client.connect(host, port)
             log("listDirectory: Conectado. Reply: ${client.replyCode}")
 
-            val reply = client.replyCode
-            if (!FTPReply.isPositiveCompletion(reply)) {
-                return@withContext Result.failure(Exception("El servidor FTP rechazó la conexión (Código: $reply)"))
-            }
-
             val user = config.username.trim().ifBlank { "anonymous" }
             val pass = config.password
             val loginSuccess = client.login(user, pass)
@@ -189,20 +179,18 @@ class FtpManager(
 
             log("listDirectory: Archivos recibidos: ${files?.size ?: "null"}")
 
-            val items = mutableListOf<FtpItem>()
-            files?.forEach { f ->
+            val items = files?.mapNotNull { f ->
                 val name = f.name
                 if (name != "." && name != "..") {
                     val fullPath = if (targetPath.endsWith("/")) "$targetPath$name" else "$targetPath/$name"
                     val isDir = f.isDirectory
-                    items.add(FtpItem(name = name, path = fullPath, isDirectory = isDir, size = f.size))
-                }
-            }
+                    FtpItem(name = name, path = fullPath, isDirectory = isDir, size = f.size)
+                } else null
+            }?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: emptyList()
 
-            try { client.logout() } catch (_: Exception) {}
-            val sorted = items.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-            log("listDirectory: Éxito con ${sorted.size} elementos devueltos")
-            Result.success(sorted)
+            try { client.disconnect() } catch (_: Exception) {}
+            log("listDirectory: Éxito con ${items.size} elementos devueltos")
+            Result.success(items)
         } catch (e: Exception) {
             log("listDirectory ERROR: ${e.javaClass.simpleName} - ${e.message}")
             Result.failure(friendlyException(e, host, port))
@@ -215,9 +203,9 @@ class FtpManager(
         val msg = e.message ?: ""
         return when {
             msg.contains("Connection refused", ignoreCase = true) ->
-                Exception("Conexión rechazada en $host:$port. Compruebe que la IP y el puerto sean correctos (si usa un móvil con WiFi FTP Server suele ser puerto 2121 en vez de 21).")
+                Exception("Conexión rechazada en $host:$port. Compruebe que la IP y el puerto sean correctos y que el servidor FTP esté activo.")
             e is java.net.SocketTimeoutException || msg.contains("timed out", ignoreCase = true) ->
-                Exception("Tiempo de espera agotado al conectar a $host:$port. Compruebe que el PC y el servidor estén conectados a la misma red Wi-Fi y que el servidor FTP esté activo.")
+                Exception("Tiempo de espera agotado al conectar a $host:$port. Compruebe que el PC y el servidor estén en la misma red y que el servidor FTP esté activo.")
             e is java.net.UnknownHostException ->
                 Exception("No se puede resolver el host '$host'. Compruebe la dirección IP.")
             else ->
@@ -297,7 +285,6 @@ class FtpManager(
                 }
             }
 
-            try { client.logout() } catch (_: Exception) {}
             try { client.disconnect() } catch (_: Exception) {}
             if (success) Result.success(true) else Result.failure(Exception("No se pudo descargar el archivo: $remotePath"))
         } catch (e: Exception) {
