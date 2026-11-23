@@ -193,8 +193,37 @@ class DesktopMusicViewModel(
     private val _repeatMode = MutableStateFlow(RepeatMode.OFF)
     val repeatMode: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
 
+    // Historial secuencial de pistas reproducidas (permite navegación hacia atrás determinista)
+    private val playHistory = mutableListOf<Song>()
+    private var historyPointer = -1
+    private val unplayedShuffleIndices = mutableListOf<Int>()
+
+    val currentHistory: List<Song> get() = playHistory.toList()
+    val currentHistoryPointer: Int get() = historyPointer
+
+    private fun resetShufflePool() {
+        val q = _playbackQueue.value
+        unplayedShuffleIndices.clear()
+        if (q.isNotEmpty()) {
+            unplayedShuffleIndices.addAll(q.indices.filter { it != currentIndex }.shuffled())
+        }
+    }
+
+    private fun pushToHistory(song: Song) {
+        while (playHistory.size > historyPointer + 1) {
+            playHistory.removeLast()
+        }
+        if (playHistory.isEmpty() || playHistory.last().id != song.id) {
+            playHistory.add(song)
+        }
+        historyPointer = playHistory.size - 1
+    }
+
     fun toggleShuffle() {
         _isShuffle.value = !_isShuffle.value
+        if (_isShuffle.value) {
+            resetShufflePool()
+        }
     }
 
     fun toggleRepeatMode() {
@@ -206,8 +235,17 @@ class DesktopMusicViewModel(
     }
 
     fun playSong(song: Song, queue: List<Song> = emptyList()) {
-        _playbackQueue.value = if (queue.isNotEmpty()) queue else _songs.value
-        currentIndex = _playbackQueue.value.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        val newQueue = if (queue.isNotEmpty()) queue else _songs.value
+        val queueChanged = _playbackQueue.value != newQueue
+        _playbackQueue.value = newQueue
+        currentIndex = newQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        if (queueChanged) {
+            playHistory.clear()
+            historyPointer = -1
+            resetShufflePool()
+        }
+        pushToHistory(song)
+        unplayedShuffleIndices.remove(currentIndex)
         playSongInternal(song)
     }
 
@@ -243,8 +281,40 @@ class DesktopMusicViewModel(
             return
         }
 
+        // 1. Si el usuario había retrocedido (backward), avanzar por el historial existente
+        if (historyPointer >= 0 && historyPointer < playHistory.size - 1) {
+            historyPointer++
+            val nextSongInHistory = playHistory[historyPointer]
+            val idx = q.indexOfFirst { it.id == nextSongInHistory.id }
+            if (idx != -1) {
+                currentIndex = idx
+                playSongInternal(q[currentIndex])
+                return
+            }
+        }
+
+        // 2. Si estamos al frente del historial, calcular la siguiente pista
         if (_isShuffle.value) {
-            currentIndex = (0 until q.size).random()
+            if (unplayedShuffleIndices.isEmpty()) {
+                resetShufflePool()
+                if (unplayedShuffleIndices.isEmpty()) {
+                    if (_repeatMode.value == RepeatMode.OFF && !fromUser) {
+                        player.stop()
+                        return
+                    }
+                }
+            }
+
+            val nextIdx = if (unplayedShuffleIndices.isNotEmpty()) {
+                unplayedShuffleIndices.removeAt(0)
+            } else {
+                if (q.size > 1) {
+                    q.indices.filter { it != currentIndex }.randomOrNull() ?: 0
+                } else {
+                    0
+                }
+            }
+            currentIndex = nextIdx.coerceIn(0, q.size - 1)
         } else {
             if (currentIndex + 1 >= q.size) {
                 if (_repeatMode.value == RepeatMode.ALL || fromUser) {
@@ -257,16 +327,48 @@ class DesktopMusicViewModel(
                 currentIndex++
             }
         }
+
         val nextSong = q.getOrNull(currentIndex) ?: return
+        pushToHistory(nextSong)
+        unplayedShuffleIndices.remove(currentIndex)
         playSongInternal(nextSong)
     }
 
     fun playPrevious() {
         val q = _playbackQueue.value
         if (q.isEmpty()) return
-        currentIndex = if (currentIndex - 1 < 0) q.size - 1 else currentIndex - 1
-        val prevSong = q.getOrNull(currentIndex) ?: return
-        playSongInternal(prevSong)
+
+        // Si la pista actual lleva sonando más de 3 segundos, reiniciar al principio (0s)
+        if (player.currentPositionSec.value > 3L) {
+            player.seekTo(0L)
+            return
+        }
+
+        // Si hay historial previo de pistas reproducidas, retroceder exactamente a la anterior
+        if (historyPointer > 0) {
+            historyPointer--
+            val prevSongInHistory = playHistory[historyPointer]
+            val idx = q.indexOfFirst { it.id == prevSongInHistory.id }
+            if (idx != -1) {
+                currentIndex = idx
+                playSongInternal(q[currentIndex])
+                return
+            } else {
+                playSongInternal(prevSongInHistory)
+                return
+            }
+        }
+
+        // Si estamos al principio del historial (sin canciones anteriores registradas):
+        if (_isShuffle.value) {
+            // En modo aleatorio NO se salta a una pista aleatoria hacia atrás: se reinicia la actual a 00:00
+            player.seekTo(0L)
+        } else {
+            currentIndex = if (currentIndex - 1 < 0) q.size - 1 else currentIndex - 1
+            val prevSong = q.getOrNull(currentIndex) ?: return
+            pushToHistory(prevSong)
+            playSongInternal(prevSong)
+        }
     }
 
     fun playSongAtQueueIndex(index: Int) {
@@ -274,6 +376,8 @@ class DesktopMusicViewModel(
         if (index in q.indices) {
             currentIndex = index
             val song = q[index]
+            pushToHistory(song)
+            unplayedShuffleIndices.remove(index)
             playSongInternal(song)
         }
     }
@@ -303,6 +407,9 @@ class DesktopMusicViewModel(
     fun clearQueue() {
         _playbackQueue.value = emptyList()
         currentIndex = 0
+        playHistory.clear()
+        historyPointer = -1
+        unplayedShuffleIndices.clear()
         player.stop()
     }
 
@@ -436,6 +543,10 @@ class DesktopMusicViewModel(
                     _isShuffle.value = true
                     _playbackQueue.value = songs
                     currentIndex = 0
+                    playHistory.clear()
+                    historyPointer = -1
+                    pushToHistory(songs[0])
+                    resetShufflePool()
                     playSongInternal(songs[0])
                 }.onFailure { err ->
                     _isScanningServerAudio.value = false
@@ -466,13 +577,21 @@ class DesktopMusicViewModel(
                 isRemote = true,
                 remoteHost = config.host,
                 remotePath = it.path,
-                fileSize = if (it.size > 0L) it.size else 0L
+                fileSize = if (it.size > 0L) item.size else 0L
             )
         }
         if (audios.isEmpty()) return
         val song = audios.firstOrNull { it.remotePath == item.path } ?: audios[0]
+        val queueChanged = _playbackQueue.value != audios
         _playbackQueue.value = audios
         currentIndex = audios.indexOfFirst { it.remotePath == song.remotePath }.coerceAtLeast(0)
+        if (queueChanged) {
+            playHistory.clear()
+            historyPointer = -1
+            resetShufflePool()
+        }
+        pushToHistory(song)
+        unplayedShuffleIndices.remove(currentIndex)
         playSongInternal(song)
     }
 
@@ -503,6 +622,10 @@ class DesktopMusicViewModel(
         _isShuffle.value = shuffle
         _playbackQueue.value = queue
         currentIndex = 0
+        playHistory.clear()
+        historyPointer = -1
+        pushToHistory(queue[0])
+        resetShufflePool()
         playSongInternal(queue[0])
     }
 

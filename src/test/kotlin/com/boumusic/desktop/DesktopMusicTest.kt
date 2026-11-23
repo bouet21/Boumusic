@@ -145,4 +145,68 @@ class DesktopMusicTest {
         assertEquals("Nirvana", a7)
         assertEquals("In Bloom", t7)
     }
+
+    @Test
+    fun testShuffleDeterministicBackNavigation() {
+        val s1 = Song(1L, "Song 1", "Artist 1", "Album 1", 180000L, "C:\\Music\\s1.mp3")
+        val s2 = Song(2L, "Song 2", "Artist 2", "Album 2", 180000L, "C:\\Music\\s2.mp3")
+        val s3 = Song(3L, "Song 3", "Artist 3", "Album 3", 180000L, "C:\\Music\\s3.mp3")
+        val s4 = Song(4L, "Song 4", "Artist 4", "Album 4", 180000L, "C:\\Music\\s4.mp3")
+        val s5 = Song(5L, "Song 5", "Artist 5", "Album 5", 180000L, "C:\\Music\\s5.mp3")
+        val queue = listOf(s1, s2, s3, s4, s5)
+
+        val vm = com.boumusic.desktop.viewmodel.DesktopMusicViewModel()
+        vm.toggleShuffle()
+        assertTrue("Shuffle debe estar activado", vm.isShuffle.value)
+
+        // Comenzamos reproduciendo s1
+        vm.playSong(s1, queue)
+        assertEquals(1L, vm.player.currentSong.value?.id)
+        assertEquals(1, vm.currentHistory.size)
+        assertEquals(0, vm.currentHistoryPointer)
+
+        // Avanzar a la siguiente canción aleatoria
+        vm.playNext(fromUser = true)
+        val secondSong = vm.player.currentSong.value!!
+        assertFalse("No debe repetir s1 inmediatamente", secondSong.id == 1L)
+        assertEquals(2, vm.currentHistory.size)
+        assertEquals(1, vm.currentHistoryPointer)
+
+        // Avanzar a la tercera canción aleatoria
+        vm.playNext(fromUser = true)
+        val thirdSong = vm.player.currentSong.value!!
+        assertFalse("No debe ser igual a la segunda", thirdSong.id == secondSong.id)
+        assertEquals(3, vm.currentHistory.size)
+        assertEquals(2, vm.currentHistoryPointer)
+
+        // Retroceder (Backward) -> DEBE ir determinísticamente a la segunda canción, NO a otra aleatoria
+        vm.playPrevious()
+        assertEquals("Al retroceder debe volver exactamente a la canción previa", secondSong.id, vm.player.currentSong.value?.id)
+        assertEquals(1, vm.currentHistoryPointer)
+
+        // Retroceder otra vez (Backward) -> DEBE volver a s1
+        vm.playPrevious()
+        assertEquals("Al retroceder debe volver a la primera canción", s1.id, vm.player.currentSong.value?.id)
+        assertEquals(0, vm.currentHistoryPointer)
+
+        // Si ya está en la primera y vuelve a pulsar retroceder en aleatorio -> no salta aleatorio hacia atrás
+        vm.playPrevious()
+        assertEquals("Al inicio no debe saltar aleatoriamente", s1.id, vm.player.currentSong.value?.id)
+
+        // Avanzar (Forward) -> DEBE recorrer hacia adelante el historial ya transitado sin re-barajar
+        vm.playNext(fromUser = true)
+        assertEquals("Forward debe avanzar en el historial hacia la segunda", secondSong.id, vm.player.currentSong.value?.id)
+        assertEquals(1, vm.currentHistoryPointer)
+
+        vm.playNext(fromUser = true)
+        assertEquals("Forward debe avanzar en el historial hacia la tercera", thirdSong.id, vm.player.currentSong.value?.id)
+        assertEquals(2, vm.currentHistoryPointer)
+
+        // Avanzar de nuevo (Forward al final del historial) -> debe elegir una nueva canción aleatoria no jugada
+        vm.playNext(fromUser = true)
+        val fourthSong = vm.player.currentSong.value!!
+        assertFalse("Cuarta canción debe ser distinta a la tercera", fourthSong.id == thirdSong.id)
+        assertEquals(4, vm.currentHistory.size)
+        assertEquals(3, vm.currentHistoryPointer)
+    }
 }
