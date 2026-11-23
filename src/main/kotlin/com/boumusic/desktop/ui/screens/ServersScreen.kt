@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.boumusic.desktop.model.FtpConfig
 import com.boumusic.desktop.model.FtpItem
+import com.boumusic.desktop.model.Song
 import com.boumusic.desktop.ui.components.ServerDialog
 import com.boumusic.desktop.ui.theme.DarkBackground
 import com.boumusic.desktop.ui.theme.DarkCardBorder
@@ -261,6 +264,51 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
                     }
                 }
             } else {
+                val audioItems = serverItems.filter { it.isAudio }
+                if (audioItems.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${audioItems.size} ${if (audioItems.size == 1) "pista de audio" else "pistas de audio"}",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { viewModel.playAllRemote(audioItems, shuffle = false) },
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Reproducir", color = DarkBackground, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = { viewModel.playAllRemote(audioItems, shuffle = true) },
+                                colors = ButtonDefaults.buttonColors(containerColor = ElectricPurple),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(Icons.Default.Shuffle, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Aleatorio", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -274,6 +322,20 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
                                 } else if (item.isAudio) {
                                     viewModel.playRemoteSong(item)
                                 }
+                            },
+                            onAddToPlaylist = {
+                                val s = Song(
+                                    id = item.path.hashCode().toLong(),
+                                    title = item.name.substringBeforeLast("."),
+                                    artist = config.name,
+                                    album = config.protocolLabel,
+                                    duration = if (item.size > 0) item.size else 0L,
+                                    path = item.path,
+                                    isRemote = true,
+                                    remoteHost = config.host,
+                                    remotePath = item.path
+                                )
+                                viewModel.showAddToPlaylistDialog.value = s
                             },
                             onDownload = {
                                 viewModel.downloadRemoteSong(item) {}
@@ -398,6 +460,7 @@ private fun BreadcrumbsRow(currentPath: String, onNavigate: (String) -> Unit) {
 private fun RemoteFileRow(
     item: FtpItem,
     onClick: () -> Unit,
+    onAddToPlaylist: () -> Unit,
     onDownload: () -> Unit
 ) {
     Row(
@@ -433,6 +496,15 @@ private fun RemoteFileRow(
         }
 
         if (item.isAudio) {
+            IconButton(onClick = onAddToPlaylist, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.AutoMirrored.Filled.PlaylistAdd,
+                    contentDescription = "Añadir a lista",
+                    tint = NeonCyan,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
             IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.Download, contentDescription = "Descargar al PC", tint = TextSecondary, modifier = Modifier.size(16.dp))
             }

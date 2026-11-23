@@ -176,7 +176,7 @@ fun PlayerBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = formatSec(positionSec),
+                    text = formatPos(positionSec, durationSec),
                     color = TextSecondary,
                     fontSize = 11.sp
                 )
@@ -199,7 +199,7 @@ fun PlayerBar(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = formatSec(durationSec),
+                    text = formatDuration(durationSec),
                     color = TextSecondary,
                     fontSize = 11.sp
                 )
@@ -277,8 +277,25 @@ fun PlayerBar(
     }
 }
 
-private fun formatSec(sec: Long): String {
-    val m = sec / 60
+private fun formatDuration(sec: Long): String {
+    if (sec <= 0) return "--:--"
+    val h = sec / 3600
+    val m = (sec % 3600) / 60
     val s = sec % 60
-    return String.format("%02d:%02d", m, s)
+    return if (h > 0) {
+        String.format("%02d:%02d:%02d", h, m, s)
+    } else {
+        String.format("%02d:%02d", m, s)
+    }
+}
+
+private fun formatPos(sec: Long, totalSec: Long): String {
+    val h = sec / 3600
+    val m = (sec % 3600) / 60
+    val s = sec % 60
+    return if (totalSec >= 3600 || h > 0) {
+        String.format("%02d:%02d:%02d", h, m, s)
+    } else {
+        String.format("%02d:%02d", m, s)
+    }
 }

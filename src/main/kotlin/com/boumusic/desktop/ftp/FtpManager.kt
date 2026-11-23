@@ -332,8 +332,12 @@ class FtpManager(
             override fun available(): Int = ftpStream.available()
             override fun close() {
                 try { ftpStream.close() } catch (_: Exception) {}
-                try { client.completePendingCommand() } catch (_: Exception) {}
-                try { if (client.isConnected) client.disconnect() } catch (_: Exception) {}
+                try {
+                    if (client.isConnected) {
+                        try { client.abort() } catch (_: Exception) {}
+                        client.disconnect()
+                    }
+                } catch (_: Exception) {}
             }
         }
     }

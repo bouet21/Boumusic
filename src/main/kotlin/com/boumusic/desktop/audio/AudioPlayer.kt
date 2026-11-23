@@ -85,6 +85,7 @@ class AudioPlayer {
         var inStream: AudioInputStream? = null
         var decodedStream: AudioInputStream? = null
         var line: SourceDataLine? = null
+        var triggerFinished = false
 
         try {
             if (generation != currentGeneration) return
@@ -105,9 +106,43 @@ class AudioPlayer {
                 activeStream = rawStream
             }
 
-            val buffered = BufferedInputStream(rawStream, 128 * 1024)
+            val buffered = BufferedInputStream(rawStream, 256 * 1024)
+
+            // Detección dinámica de duración desde cabecera de audio (MP3, FLAC, WAV, OGG)
+            var detectedDurationSec = 0L
+            try {
+                buffered.mark(256 * 1024)
+                val fileFormat = AudioSystem.getAudioFileFormat(buffered)
+                val props = fileFormat.properties()
+                val microSec = (props?.get("duration") as? Number)?.toLong()
+                    ?: (props?.get("mp3.duration.microseconds") as? Number)?.toLong()
+                if (microSec != null && microSec > 0) {
+                    detectedDurationSec = microSec / 1_000_000L
+                } else if (fileFormat.frameLength > 0 && fileFormat.format.frameRate > 0) {
+                    detectedDurationSec = (fileFormat.frameLength / fileFormat.format.frameRate).toLong()
+                }
+                buffered.reset()
+            } catch (_: Throwable) {
+                try { buffered.reset() } catch (_: Throwable) {}
+            }
+
             inStream = AudioSystem.getAudioInputStream(buffered)
             val baseFormat = inStream.format
+
+            if (detectedDurationSec <= 0) {
+                if (inStream.frameLength > 0 && baseFormat.frameRate > 0) {
+                    detectedDurationSec = (inStream.frameLength / baseFormat.frameRate).toLong()
+                }
+            }
+
+            if (detectedDurationSec <= 0 && song.duration > 0) {
+                detectedDurationSec = song.duration / 1000
+            }
+
+            if (detectedDurationSec > 0) {
+                _durationSec.value = detectedDurationSec
+                _currentSong.value = _currentSong.value?.takeIf { it.id == song.id }?.copy(duration = detectedDurationSec * 1000)
+            }
 
             val sampleRate = if (baseFormat.sampleRate > 0) baseFormat.sampleRate else 44100.0f
             val channels = if (baseFormat.channels > 0) baseFormat.channels else 2
@@ -190,15 +225,20 @@ class AudioPlayer {
             }
 
             if (generation == currentGeneration && naturalEof && !isPaused) {
-                line.drain()
+                try { line.drain() } catch (ignored: Exception) {}
                 _isPlaying.value = false
-                onSongFinished?.invoke()
+                triggerFinished = true
             }
         } catch (e: Exception) {
-            // Error silencioso si fue cancelado intencionalmente
+            // Manejo de finalización de pista o cancelación intencional
             if (generation == currentGeneration) {
-                e.printStackTrace()
-                _isPlaying.value = false
+                val nearEnd = _durationSec.value > 0 && _currentPositionSec.value >= (_durationSec.value - 3)
+                if (nearEnd || e is java.io.EOFException) {
+                    triggerFinished = true
+                } else {
+                    e.printStackTrace()
+                    _isPlaying.value = false
+                }
             }
         } finally {
             try { line?.stop() } catch (ignored: Exception) {}
@@ -211,6 +251,16 @@ class AudioPlayer {
                 if (generation == currentGeneration) {
                     activeLine = null
                     activeStream = null
+                }
+            }
+        }
+
+        // Se invoca el paso a la siguiente canción DESPUÉS de haber liberado todos los recursos (línea de audio y sockets)
+        if (triggerFinished && generation == currentGeneration) {
+            scope.launch {
+                delay(120)
+                if (generation == currentGeneration) {
+                    onSongFinished?.invoke()
                 }
             }
         }

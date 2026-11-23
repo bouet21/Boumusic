@@ -206,9 +206,20 @@ class DesktopMusicViewModel(
         playSongInternal(song)
     }
 
+    fun findServerForSong(song: Song): FtpConfig? {
+        val current = _activeServer.value
+        if (current != null && (current.host.equals(song.remoteHost, ignoreCase = true) || song.remoteHost.isBlank())) {
+            return current
+        }
+        return _savedServers.value.firstOrNull { it.host.equals(song.remoteHost, ignoreCase = true) }
+            ?: _savedServers.value.firstOrNull { it.name.equals(song.artist, ignoreCase = true) }
+            ?: current
+            ?: _savedServers.value.firstOrNull()
+    }
+
     private fun playSongInternal(song: Song) {
         if (song.isRemote) {
-            val config = _activeServer.value
+            val config = findServerForSong(song)
             if (config != null) {
                 player.play(song, startFromSec = 0L) { ftpManager.openStream(config, song.remotePath) }
             }
@@ -379,35 +390,48 @@ class DesktopMusicViewModel(
 
     fun playRemoteSong(item: FtpItem) {
         val config = _activeServer.value ?: return
-        val song = Song(
-            id = item.path.hashCode().toLong(),
-            title = item.name.substringBeforeLast("."),
-            artist = config.name,
-            album = config.protocolLabel,
-            duration = 0L,
-            path = item.path,
-            isRemote = true,
-            remoteHost = config.host,
-            remotePath = item.path
-        )
         val audios = _serverItems.value.filter { it.isAudio }.map {
             Song(
                 id = it.path.hashCode().toLong(),
                 title = it.name.substringBeforeLast("."),
                 artist = config.name,
                 album = config.protocolLabel,
-                duration = 0L,
+                duration = if (it.size > 0) it.size else 0L,
                 path = it.path,
                 isRemote = true,
                 remoteHost = config.host,
                 remotePath = it.path
             )
         }
+        if (audios.isEmpty()) return
+        val song = audios.firstOrNull { it.remotePath == item.path } ?: audios[0]
         _playbackQueue.value = audios
-        currentIndex = audios.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-        player.play(song, startFromSec = 0L) {
-            ftpManager.openStream(config, item.path)
+        currentIndex = audios.indexOfFirst { it.remotePath == song.remotePath }.coerceAtLeast(0)
+        playSongInternal(song)
+    }
+
+    fun playAllRemote(items: List<FtpItem>, shuffle: Boolean = false) {
+        val config = _activeServer.value ?: return
+        val audioSongs = items.filter { it.isAudio }.map {
+            Song(
+                id = it.path.hashCode().toLong(),
+                title = it.name.substringBeforeLast("."),
+                artist = config.name,
+                album = config.protocolLabel,
+                duration = if (it.size > 0) it.size else 0L,
+                path = it.path,
+                isRemote = true,
+                remoteHost = config.host,
+                remotePath = it.path
+            )
         }
+        if (audioSongs.isEmpty()) return
+
+        val queue = if (shuffle) audioSongs.shuffled() else audioSongs
+        _isShuffle.value = shuffle
+        _playbackQueue.value = queue
+        currentIndex = 0
+        playSongInternal(queue[0])
     }
 
     fun downloadRemoteSong(item: FtpItem, onDone: (File?) -> Unit) {
