@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.boumusic.desktop"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 
 repositories {
     mavenCentral()
@@ -59,10 +59,21 @@ compose.desktop {
                 TargetFormat.Deb
             )
             packageName = "Boumusic"
-            packageVersion = "0.1.0"
+            packageVersion = "0.2.1"
             description = "Boumusic Desktop - Reproductor de Música Ultraligero para Windows y Linux"
             vendor = "Boumusic"
             copyright = "© 2026 Boumusic"
+
+            modules(
+                "java.instrument",
+                "java.naming",
+                "java.security.jgss",
+                "java.security.sasl",
+                "java.sql",
+                "jdk.httpserver",
+                "jdk.unsupported",
+                "jdk.crypto.ec"
+            )
 
             windows {
                 menuGroup = "Boumusic"

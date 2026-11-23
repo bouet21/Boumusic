@@ -35,34 +35,56 @@ class SmbManager {
         return if (user.isBlank() || user.equals("anonymous", ignoreCase = true) || user.equals("guest", ignoreCase = true)) {
             AuthenticationContext.anonymous()
         } else {
-            val domain = if (user.contains("\\")) user.substringBefore("\\") else ""
-            val actualUser = if (user.contains("\\")) user.substringAfter("\\") else user
+            val domain = when {
+                user.contains("\\") -> user.substringBefore("\\")
+                user.contains("/") -> user.substringBefore("/")
+                else -> ""
+            }
+            val actualUser = when {
+                user.contains("\\") -> user.substringAfter("\\")
+                user.contains("/") -> user.substringAfter("/")
+                else -> user
+            }
             AuthenticationContext(actualUser, pass.toCharArray(), domain)
         }
     }
 
     suspend fun testConnection(config: FtpConfig): Result<Boolean> = withContext(Dispatchers.IO) {
+        var connection: Connection? = null
+        var session: Session? = null
+        var share: DiskShare? = null
         try {
-            val connection: Connection = smbClient.connect(config.host, config.port)
-            val session: Session = connection.authenticate(getAuthContext(config))
+            connection = smbClient.connect(config.host, config.port)
+            session = connection.authenticate(getAuthContext(config))
             val shareName = config.cleanSmbShare.ifBlank { "Musica" }
-            val share = session.connectShare(shareName) as DiskShare
+            share = session.connectShare(shareName) as DiskShare
             val isConnected = share.isConnected
-            share.close()
-            session.close()
-            connection.close()
             Result.success(isConnected)
-        } catch (e: Exception) {
-            Result.failure(e)
+        } catch (t: Throwable) {
+            val msg = when {
+                t.message?.contains("STATUS_BAD_NETWORK_NAME", ignoreCase = true) == true ->
+                    "El recurso compartido '${config.cleanSmbShare.ifBlank { "Musica" }}' no existe en el servidor."
+                t.message?.contains("STATUS_LOGON_FAILURE", ignoreCase = true) == true ->
+                    "Usuario o contraseña incorrectos en SMB."
+                else -> t.message ?: t.javaClass.simpleName
+            }
+            Result.failure(Exception(msg, t))
+        } finally {
+            try { share?.close() } catch (_: Throwable) {}
+            try { session?.close() } catch (_: Throwable) {}
+            try { connection?.close() } catch (_: Throwable) {}
         }
     }
 
     suspend fun listDirectory(config: FtpConfig, subPath: String): Result<List<FtpItem>> = withContext(Dispatchers.IO) {
+        var connection: Connection? = null
+        var session: Session? = null
+        var share: DiskShare? = null
         try {
-            val connection = smbClient.connect(config.host, config.port)
-            val session = connection.authenticate(getAuthContext(config))
+            connection = smbClient.connect(config.host, config.port)
+            session = connection.authenticate(getAuthContext(config))
             val shareName = config.cleanSmbShare.ifBlank { "Musica" }
-            val share = session.connectShare(shareName) as DiskShare
+            share = session.connectShare(shareName) as DiskShare
 
             val normalizedPath = subPath.trim().removePrefix("/").removePrefix("\\").replace("/", "\\")
             val items = mutableListOf<FtpItem>()
@@ -90,14 +112,21 @@ class SmbManager {
                 )
             }
 
-            share.close()
-            session.close()
-            connection.close()
-
             items.sortWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
             Result.success(items)
-        } catch (e: Exception) {
-            Result.failure(e)
+        } catch (t: Throwable) {
+            val msg = when {
+                t.message?.contains("STATUS_BAD_NETWORK_NAME", ignoreCase = true) == true ->
+                    "El recurso compartido '${config.cleanSmbShare.ifBlank { "Musica" }}' no existe en el servidor."
+                t.message?.contains("STATUS_LOGON_FAILURE", ignoreCase = true) == true ->
+                    "Usuario o contraseña incorrectos en SMB."
+                else -> t.message ?: t.javaClass.simpleName
+            }
+            Result.failure(Exception(msg, t))
+        } finally {
+            try { share?.close() } catch (_: Throwable) {}
+            try { session?.close() } catch (_: Throwable) {}
+            try { connection?.close() } catch (_: Throwable) {}
         }
     }
 
