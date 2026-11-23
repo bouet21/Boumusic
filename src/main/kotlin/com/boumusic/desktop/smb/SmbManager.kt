@@ -190,4 +190,70 @@ class SmbManager {
             try { inputStream?.close() } catch (ignored: Exception) {}
         }
     }
+
+    suspend fun listAllAudioRecursive(config: FtpConfig, maxItems: Int = 10000, maxDepth: Int = 6): Result<List<FtpItem>> = withContext(Dispatchers.IO) {
+        var connection: Connection? = null
+        var session: Session? = null
+        var share: DiskShare? = null
+        try {
+            connection = smbClient.connect(config.host, config.port)
+            session = connection.authenticate(getAuthContext(config))
+            val shareName = config.cleanSmbShare.ifBlank { "Musica" }
+            share = session.connectShare(shareName) as DiskShare
+
+            val items = mutableListOf<FtpItem>()
+            val queue = ArrayDeque<Pair<String, Int>>()
+            val visited = mutableSetOf<String>()
+            queue.add("" to 0)
+
+            while (queue.isNotEmpty() && items.size < maxItems) {
+                val (currentPath, depth) = queue.removeFirst()
+                if (!visited.add(currentPath)) continue
+
+                val fileInfoList = try {
+                    share.list(currentPath)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+
+                for (fileInfo in fileInfoList) {
+                    val name = fileInfo.fileName
+                    if (name == "." || name == "..") continue
+
+                    val isDir = EnumWithValue.EnumUtils.isSet(
+                        fileInfo.fileAttributes,
+                        FileAttributes.FILE_ATTRIBUTE_DIRECTORY
+                    )
+
+                    val itemSubPath = if (currentPath.isEmpty()) name else "$currentPath\\$name"
+                    val webPath = "/" + itemSubPath.replace("\\", "/")
+
+                    if (isDir) {
+                        if (depth < maxDepth && !name.startsWith(".")) {
+                            queue.add(itemSubPath to depth + 1)
+                        }
+                    } else {
+                        val item = FtpItem(name = name, path = webPath, isDirectory = false, size = fileInfo.endOfFile)
+                        if (item.isAudio) {
+                            items.add(item)
+                        }
+                    }
+                }
+            }
+            Result.success(items)
+        } catch (t: Throwable) {
+            val msg = when {
+                t.message?.contains("STATUS_BAD_NETWORK_NAME", ignoreCase = true) == true ->
+                    "El recurso compartido '${config.cleanSmbShare.ifBlank { "Musica" }}' no existe en el servidor."
+                t.message?.contains("STATUS_LOGON_FAILURE", ignoreCase = true) == true ->
+                    "Usuario o contraseña incorrectos en SMB."
+                else -> t.message ?: t.javaClass.simpleName
+            }
+            Result.failure(Exception(msg, t))
+        } finally {
+            try { share?.close() } catch (_: Throwable) {}
+            try { session?.close() } catch (_: Throwable) {}
+            try { connection?.close() } catch (_: Throwable) {}
+        }
+    }
 }

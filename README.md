@@ -1,6 +1,6 @@
 # 🖥️ Boumusic Desktop — Reproductor de Música Moderno y Ligero (Windows & Linux)
 
-[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v1.0.3)](https://github.com/bouet21/Boumusic-Desktop/releases)
+[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v1.0.4)](https://github.com/bouet21/Boumusic-Desktop/releases)
 [![Platform](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux-7B2CBF)](#)
 [![Compose Desktop](https://img.shields.io/badge/Compose%20Multiplatform-1.6.11-brightgreen)](https://www.jetbrains.com/lp/compose-multiplatform/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue)](https://kotlinlang.org)
@@ -64,6 +64,16 @@ Boumusic Desktop utiliza `jpackage` para generar instaladores compactos y ejecut
   ./gradlew packageDeb
   # Genera el paquete DEB para Debian/Ubuntu en build/compose/binaries/main/deb/
   ```
+
+---
+
+## 🆕 Novedades en v1.0.4
+* 🔀 **Aleatorio en Todo el Servidor (Recursivo)**: Nuevo botón *Aleatorio Todo el Servidor* que rastrea de manera instantánea todos los subdirectorios y carpetas de tu servidor FTP, SMB o WebDAV, mezclando todo el catálogo disponible en una única cola de reproducción.
+* 🏷️ **Extracción Inteligente de Artista y Título**:
+  * Fin del artista fijado erróneamente como el nombre del servidor o carpeta.
+  * Análisis sintáctico avanzado de nombres de archivo (`Artista - Canción`, números de pista, etiquetas `[Official Video]`, etc.).
+  * Extracción nativa en tiempo real de metadatos de cabecera **ID3v2** (frames `TIT2`, `TPE1`, `TALB`, `TLEN`) y **FLAC Vorbis Comment** (`TITLE`, `ARTIST`, `ALBUM`) durante el streaming.
+* 📁 **Botones diferenciados en carpetas**: Opciones explícitas de *Reproducir carpeta* y *Aleatorio carpeta* vs *Aleatorio Todo el Servidor*.
 
 ---
 

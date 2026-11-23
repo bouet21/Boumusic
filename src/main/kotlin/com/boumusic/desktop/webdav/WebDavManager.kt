@@ -166,4 +166,31 @@ class WebDavManager {
             try { input?.close() } catch (ignored: Exception) {}
         }
     }
+
+    suspend fun listAllAudioRecursive(config: FtpConfig, maxItems: Int = 10000, maxDepth: Int = 6): Result<List<FtpItem>> = withContext(Dispatchers.IO) {
+        val items = mutableListOf<FtpItem>()
+        val queue = ArrayDeque<Pair<String, Int>>()
+        val visited = mutableSetOf<String>()
+        val startPath = config.webDavPath.ifBlank { "/" }
+        queue.add(startPath to 0)
+
+        while (queue.isNotEmpty() && items.size < maxItems) {
+            val (currentPath, depth) = queue.removeFirst()
+            if (!visited.add(currentPath)) continue
+
+            val res = listDirectory(config, currentPath)
+            if (res.isSuccess) {
+                for (item in res.getOrThrow()) {
+                    if (item.isDirectory) {
+                        if (depth < maxDepth && !item.name.startsWith(".")) {
+                            queue.add(item.path to depth + 1)
+                        }
+                    } else if (item.isAudio) {
+                        items.add(item)
+                    }
+                }
+            }
+        }
+        Result.success(items)
+    }
 }

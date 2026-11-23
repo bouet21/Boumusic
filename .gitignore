@@ -8,3 +8,5 @@ Thumbs.db
 *.zip
 dist-linux/
 release/
+Boumusic-Windows-*/
+Boumusic-Linux-*/

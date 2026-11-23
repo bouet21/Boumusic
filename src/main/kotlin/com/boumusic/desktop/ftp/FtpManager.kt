@@ -389,4 +389,82 @@ class FtpManager(
             Result.failure(e)
         }
     }
+
+    suspend fun listAllAudioRecursive(config: FtpConfig, maxItems: Int = 10000, maxDepth: Int = 6): Result<List<FtpItem>> = withContext(Dispatchers.IO) {
+        if (config.isSmb) return@withContext smbManager.listAllAudioRecursive(config, maxItems, maxDepth)
+        if (config.isWebDav) return@withContext webDavManager.listAllAudioRecursive(config, maxItems, maxDepth)
+
+        val (host, port) = sanitizeHostAndPort(config)
+        var client: FTPClient? = null
+        try {
+            client = createClient(config)
+            client.connect(host, port)
+            val user = config.username.trim().ifBlank { "anonymous" }
+            val loginSuccess = client.login(user, config.password)
+            if (!loginSuccess) {
+                return@withContext Result.failure(Exception("Autenticación fallida en $host:$port"))
+            }
+
+            configurePostLogin(client)
+            client.setFileType(FTP.BINARY_FILE_TYPE)
+            client.enterLocalPassiveMode()
+
+            val items = mutableListOf<FtpItem>()
+            val queue = ArrayDeque<Pair<String, Int>>()
+            val visited = mutableSetOf<String>()
+            queue.add("/" to 0)
+
+            while (queue.isNotEmpty() && items.size < maxItems) {
+                val (currentPath, depth) = queue.removeFirst()
+                val normalizedCurrent = if (currentPath.startsWith("/")) currentPath else "/$currentPath"
+                if (!visited.add(normalizedCurrent)) continue
+
+                val files = try {
+                    fetchFiles(client, normalizedCurrent)
+                } catch (_: Exception) {
+                    null
+                }
+
+                if (files != null && files.isNotEmpty()) {
+                    for (f in files) {
+                        val name = f.name
+                        if (name == "." || name == "..") continue
+                        val fullPath = if (normalizedCurrent == "/") "/$name" else "${normalizedCurrent.trimEnd('/')}/$name"
+                        if (f.isDirectory) {
+                            if (depth < maxDepth && !name.startsWith(".")) {
+                                queue.add(fullPath to depth + 1)
+                            }
+                        } else if (isAudioExtension(name)) {
+                            items.add(FtpItem(name = name, path = fullPath, isDirectory = false, size = f.size))
+                        }
+                    }
+                } else {
+                    val names = try {
+                        if (normalizedCurrent == "/") client.listNames() ?: client.listNames("") ?: client.listNames("/")
+                        else client.listNames(normalizedCurrent) ?: client.listNames(normalizedCurrent.removePrefix("/"))
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (names != null) {
+                        for (rawName in names) {
+                            val name = rawName.substringAfterLast("/").substringAfterLast("\\").trim()
+                            if (name.isEmpty() || name == "." || name == "..") continue
+                            val fullPath = if (normalizedCurrent == "/") "/$name" else "${normalizedCurrent.trimEnd('/')}/$name"
+                            if (isAudioExtension(name)) {
+                                items.add(FtpItem(name = name, path = fullPath, isDirectory = false, size = 0L))
+                            } else if (!name.contains(".") && depth < maxDepth && !name.startsWith(".")) {
+                                queue.add(fullPath to depth + 1)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Result.success(items)
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally {
+            try { client?.disconnect() } catch (_: Exception) {}
+        }
+    }
 }

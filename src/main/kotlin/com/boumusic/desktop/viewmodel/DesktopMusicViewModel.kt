@@ -1,5 +1,6 @@
 package com.boumusic.desktop.viewmodel
 
+import com.boumusic.desktop.audio.AudioMetadataHelper
 import com.boumusic.desktop.audio.AudioPlayer
 import com.boumusic.desktop.data.BackupManager
 import com.boumusic.desktop.data.HistoryAndStatsManager
@@ -216,7 +217,7 @@ class DesktopMusicViewModel(
             return current
         }
         return _savedServers.value.firstOrNull { it.host.equals(song.remoteHost, ignoreCase = true) }
-            ?: _savedServers.value.firstOrNull { it.name.equals(song.artist, ignoreCase = true) }
+            ?: _savedServers.value.firstOrNull { it.name.equals(song.album, ignoreCase = true) }
             ?: current
             ?: _savedServers.value.firstOrNull()
     }
@@ -392,15 +393,73 @@ class DesktopMusicViewModel(
         }
     }
 
+    private val _isScanningServerAudio = MutableStateFlow(false)
+    val isScanningServerAudio: StateFlow<Boolean> = _isScanningServerAudio.asStateFlow()
+
+    private val _serverScanStatus = MutableStateFlow("")
+    val serverScanStatus: StateFlow<String> = _serverScanStatus.asStateFlow()
+
+    fun playServerShuffleAll() {
+        val config = _activeServer.value ?: return
+        scope.launch(Dispatchers.IO) {
+            _isScanningServerAudio.value = true
+            _serverScanStatus.value = "Buscando todas las canciones en ${config.name}..."
+            try {
+                val result = ftpManager.listAllAudioRecursive(config)
+                result.onSuccess { allItems ->
+                    _isScanningServerAudio.value = false
+                    if (allItems.isEmpty()) {
+                        _serverError.value = "No se encontraron canciones en el servidor ${config.name}."
+                        return@onSuccess
+                    }
+
+                    val songs = allItems.map { item ->
+                        val estimatedMs = if (item.size > 1024L) (item.size * 1000L) / 24000L else 0L
+                        val (artist, title) = AudioMetadataHelper.parseFileNameMetadata(
+                            fileName = item.name,
+                            parentFolderName = item.path.substringBeforeLast("/", "")
+                        )
+                        Song(
+                            id = item.path.hashCode().toLong(),
+                            title = title,
+                            artist = artist,
+                            album = config.name,
+                            duration = estimatedMs,
+                            path = item.path,
+                            isRemote = true,
+                            remoteHost = config.host,
+                            remotePath = item.path
+                        )
+                    }.shuffled()
+
+                    _isShuffle.value = true
+                    _playbackQueue.value = songs
+                    currentIndex = 0
+                    playSongInternal(songs[0])
+                }.onFailure { err ->
+                    _isScanningServerAudio.value = false
+                    _serverError.value = "Error al escanear servidor: ${err.message}"
+                }
+            } catch (t: Throwable) {
+                _isScanningServerAudio.value = false
+                _serverError.value = "Error al escanear servidor: ${t.message}"
+            }
+        }
+    }
+
     fun playRemoteSong(item: FtpItem) {
         val config = _activeServer.value ?: return
         val audios = _serverItems.value.filter { it.isAudio }.map {
             val estimatedMs = if (it.size > 1024L) (it.size * 1000L) / 24000L else 0L
+            val (artist, title) = AudioMetadataHelper.parseFileNameMetadata(
+                fileName = it.name,
+                parentFolderName = _serverPath.value
+            )
             Song(
                 id = it.path.hashCode().toLong(),
-                title = it.name.substringBeforeLast("."),
-                artist = config.name,
-                album = config.protocolLabel,
+                title = title,
+                artist = artist,
+                album = config.name,
                 duration = estimatedMs,
                 path = it.path,
                 isRemote = true,
@@ -419,11 +478,15 @@ class DesktopMusicViewModel(
         val config = _activeServer.value ?: return
         val audioSongs = items.filter { it.isAudio }.map {
             val estimatedMs = if (it.size > 1024L) (it.size * 1000L) / 24000L else 0L
+            val (artist, title) = AudioMetadataHelper.parseFileNameMetadata(
+                fileName = it.name,
+                parentFolderName = _serverPath.value
+            )
             Song(
                 id = it.path.hashCode().toLong(),
-                title = it.name.substringBeforeLast("."),
-                artist = config.name,
-                album = config.protocolLabel,
+                title = title,
+                artist = artist,
+                album = config.name,
                 duration = estimatedMs,
                 path = it.path,
                 isRemote = true,
@@ -605,6 +668,16 @@ class DesktopMusicViewModel(
         player.onSongFinished = { playNext(fromUser = false) }
         player.onSongPlaybackLogged = { song, durationMs ->
             historyManager.recordPlayback(song, durationMs)
+        }
+        player.onMetadataUpdated = { updatedSong ->
+            val curQueue = _playbackQueue.value.toMutableList()
+            val idx = curQueue.indexOfFirst {
+                it.id == updatedSong.id || (it.isRemote && it.remotePath == updatedSong.remotePath)
+            }
+            if (idx != -1) {
+                curQueue[idx] = updatedSong
+                _playbackQueue.value = curQueue
+            }
         }
         // Carga ultra-rápida desde caché local para arranque instantáneo (< 2ms)
         val cached = repository.loadCachedSongs()

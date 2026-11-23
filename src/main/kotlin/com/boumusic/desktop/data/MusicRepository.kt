@@ -94,10 +94,7 @@ class MusicRepository {
                 .maxDepth(4)
                 .filter { it.isFile && it.extension.lowercase() in audioExtensions }
                 .forEach { file ->
-                    val baseName = file.nameWithoutExtension
-                    val parts = baseName.split(" - ", limit = 2)
-                    val artist = if (parts.size == 2) parts[0].trim() else file.parentFile?.name ?: "Artista"
-                    val title = if (parts.size == 2) parts[1].trim() else baseName
+                    val (artist, title) = AudioMetadataHelper.parseFileNameMetadata(file.name, file.parentFile?.name)
 
                     val durationMs = AudioMetadataHelper.detectFileDurationMs(file)
                     songs.add(

@@ -5,6 +5,13 @@ import java.io.File
 import java.io.FileInputStream
 import javax.sound.sampled.AudioSystem
 
+data class AudioTrackMetadata(
+    val title: String? = null,
+    val artist: String? = null,
+    val album: String? = null,
+    val durationSec: Long = 0L
+)
+
 object AudioMetadataHelper {
 
     private val BITRATES_MPEG1_L3 = intArrayOf(0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0)
@@ -14,10 +21,16 @@ object AudioMetadataHelper {
     private val SAMPLE_RATES_MPEG25 = intArrayOf(11025, 12000, 8000, 0)
 
     /**
-     * Detecta la duración en segundos desde el búfer inicial del archivo o stream.
-     * Soporta MP3 (CBR y VBR con Xing/Info o ID3 TLEN), WAV y FLAC.
+     * Extrae información de metadatos (Título, Artista, Álbum y Duración) desde la cabecera
+     * del stream sin necesidad de descargar o leer el archivo completo.
+     * Soporta MP3 (ID3v2.2, ID3v2.3, ID3v2.4 y frames MPEG/Xing), FLAC (STREAMINFO y Vorbis) y WAV.
      */
-    fun detectDurationSec(stream: BufferedInputStream, fileSize: Long = 0L): Long {
+    fun extractMetadata(stream: BufferedInputStream, fileSize: Long = 0L): AudioTrackMetadata {
+        var durationSec = 0L
+        var title: String? = null
+        var artist: String? = null
+        var album: String? = null
+
         try {
             val maxHeaderRead = 128 * 1024
             stream.mark(maxHeaderRead)
@@ -30,7 +43,7 @@ object AudioMetadataHelper {
             }
             stream.reset()
 
-            if (bytesRead < 16) return 0L
+            if (bytesRead < 16) return AudioTrackMetadata()
 
             // 1. WAV
             if (buffer[0] == 'R'.code.toByte() && buffer[1] == 'I'.code.toByte() &&
@@ -38,26 +51,53 @@ object AudioMetadataHelper {
                 bytesRead > 36 && buffer[8] == 'W'.code.toByte() && buffer[9] == 'A'.code.toByte() &&
                 buffer[10] == 'V'.code.toByte() && buffer[11] == 'E'.code.toByte()
             ) {
-                val dur = parseWavDuration(buffer, bytesRead, fileSize)
-                if (dur > 0) return dur
+                durationSec = parseWavDuration(buffer, bytesRead, fileSize)
+                return AudioTrackMetadata(durationSec = durationSec)
             }
 
             // 2. FLAC
             if (buffer[0] == 'f'.code.toByte() && buffer[1] == 'L'.code.toByte() &&
                 buffer[2] == 'a'.code.toByte() && buffer[3] == 'C'.code.toByte() && bytesRead >= 42
             ) {
-                val dur = parseFlacDuration(buffer, bytesRead)
-                if (dur > 0) return dur
+                durationSec = parseFlacDuration(buffer, bytesRead)
+                val flacMeta = parseFlacVorbisComment(buffer, bytesRead)
+                return AudioTrackMetadata(
+                    title = flacMeta.title,
+                    artist = flacMeta.artist,
+                    album = flacMeta.album,
+                    durationSec = durationSec
+                )
             }
 
-            // 3. MP3 (con o sin ID3v2)
+            // 3. MP3 (con cabecera ID3v2 o sin ella)
+            val id3Meta = parseId3v2Tags(buffer, bytesRead)
+            title = id3Meta.title
+            artist = id3Meta.artist
+            album = id3Meta.album
+            durationSec = id3Meta.durationSec
+
             val mp3Dur = parseMp3Duration(buffer, bytesRead, fileSize)
-            if (mp3Dur > 0) return mp3Dur
+            if (mp3Dur > 0L && durationSec <= 0L) {
+                durationSec = mp3Dur
+            }
 
         } catch (_: Throwable) {
             try { stream.reset() } catch (_: Throwable) {}
         }
-        return 0L
+
+        return AudioTrackMetadata(
+            title = title,
+            artist = artist,
+            album = album,
+            durationSec = durationSec
+        )
+    }
+
+    /**
+     * Detecta la duración en segundos desde el búfer inicial del archivo o stream.
+     */
+    fun detectDurationSec(stream: BufferedInputStream, fileSize: Long = 0L): Long {
+        return extractMetadata(stream, fileSize).durationSec
     }
 
     /**
@@ -90,6 +130,255 @@ object AudioMetadataHelper {
         } catch (_: Throwable) {}
 
         return 0L
+    }
+
+    /**
+     * Analiza de forma inteligente el nombre del archivo para extraer el Artista y el Título
+     * sin mostrar nombres feos ni configurar el nombre del servidor como artista.
+     * Soporta patrones como:
+     * - "Artista - Canción.mp3"
+     * - "01. Artista - Canción.mp3"
+     * - "01 - Artista - Canción.mp3"
+     * - "01 Canción.mp3"
+     * - "Canción [Official Video].mp3"
+     */
+    fun parseFileNameMetadata(fileName: String, parentFolderName: String? = null): Pair<String, String> {
+        var clean = fileName.substringBeforeLast(".")
+        if (clean.isBlank()) return "Desconocido" to fileName
+
+        // Eliminar número de pista al inicio: "01. ", "01 - ", "1. ", "01 ", "01_"
+        clean = clean.replace(Regex("""^\s*\d{1,3}\s*[\.\-_]\s*"""), "").trim()
+        clean = clean.replace(Regex("""^\s*\d{1,3}\s+"""), "").trim()
+
+        // Eliminar sufijos típicos de ripeo o vídeo de YouTube:
+        // [Official Video], (Audio Oficial), [320kbps], (Lyric Video), etc.
+        clean = clean.replace(
+            Regex("""\s*[\(\[]\s*(official\s*(music\s*)?video|video\s*oficial|audio\s*oficial|official\s*audio|lyric\s*video|video\s*lyric|audio|hq|hd|320\s*kbps|128\s*kbps|remastered|remaster|clip\s*officiel)\s*[\)\]]""", RegexOption.IGNORE_CASE),
+            ""
+        ).trim()
+
+        var artistCandidate: String? = null
+        var titleCandidate: String? = null
+
+        val dashParts = clean.split(Regex("""\s+[-—]\s+"""))
+        if (dashParts.size >= 3) {
+            artistCandidate = dashParts[1].trim()
+            titleCandidate = dashParts.drop(2).joinToString(" - ").trim()
+        } else if (dashParts.size == 2) {
+            val p0 = dashParts[0].trim()
+            val p1 = dashParts[1].trim()
+            if (p0.matches(Regex("""^\d+$"""))) {
+                titleCandidate = p1
+            } else {
+                artistCandidate = p0
+                titleCandidate = p1
+            }
+        } else {
+            val underscoreParts = clean.split(Regex("""\s+_\s+"""))
+            if (underscoreParts.size == 2) {
+                artistCandidate = underscoreParts[0].trim()
+                titleCandidate = underscoreParts[1].trim()
+            }
+        }
+
+        var finalTitle = titleCandidate?.ifBlank { null } ?: clean
+        var finalArtist = artistCandidate?.ifBlank { null }
+
+        // Si no se encontró artista en el nombre del archivo, comprobar carpeta contenedora
+        if (finalArtist == null && !parentFolderName.isNullOrBlank()) {
+            val folder = parentFolderName.trim().trim('/', '\\').substringAfterLast("/").substringAfterLast("\\").trim()
+            val genericFolders = setOf(
+                "music", "música", "musica", "downloads", "descargas", "boumusic",
+                "desktop", "audio", "canciones", "songs", "sound", "root", "", "/", "\\"
+            )
+            if (folder.lowercase() !in genericFolders && !folder.startsWith("192.") && !folder.startsWith("10.") && !folder.startsWith("172.")) {
+                finalArtist = folder
+            }
+        }
+
+        if (finalArtist.isNullOrBlank()) {
+            finalArtist = "Desconocido"
+        }
+
+        return finalArtist to finalTitle
+    }
+
+    private fun parseId3v2Tags(buffer: ByteArray, len: Int): AudioTrackMetadata {
+        var title: String? = null
+        var artist: String? = null
+        var album: String? = null
+        var durationSec = 0L
+
+        if (len < 10) return AudioTrackMetadata()
+        if (buffer[0] != 0x49.toByte() || buffer[1] != 0x44.toByte() || buffer[2] != 0x33.toByte()) {
+            return AudioTrackMetadata()
+        }
+
+        val majorVersion = buffer[3].toInt() and 0xFF
+        val flags = buffer[5].toInt() and 0xFF
+        val tagSize = ((buffer[6].toInt() and 0x7F) shl 21) or
+                ((buffer[7].toInt() and 0x7F) shl 14) or
+                ((buffer[8].toInt() and 0x7F) shl 7) or
+                (buffer[9].toInt() and 0x7F)
+        val fullId3Size = 10 + tagSize
+        val maxSearch = len.coerceAtMost(fullId3Size)
+
+        if (majorVersion == 2) {
+            var offset = 10
+            while (offset + 6 <= maxSearch) {
+                if (buffer[offset] == 0.toByte()) break
+                val id = String(buffer, offset, 3, Charsets.US_ASCII)
+                val frameSize = ((buffer[offset + 3].toInt() and 0xFF) shl 16) or
+                        ((buffer[offset + 4].toInt() and 0xFF) shl 8) or
+                        (buffer[offset + 5].toInt() and 0xFF)
+                if (frameSize <= 0 || offset + 6 + frameSize > maxSearch) break
+                val encoding = buffer[offset + 6].toInt() and 0xFF
+                val text = decodeId3String(buffer, offset + 7, frameSize - 1, encoding)
+                when (id) {
+                    "TT2" -> if (title == null && text.isNotBlank()) title = text
+                    "TP1" -> if (artist == null && text.isNotBlank()) artist = text
+                    "TAL" -> if (album == null && text.isNotBlank()) album = text
+                }
+                offset += 6 + frameSize
+            }
+        } else if (majorVersion == 3 || majorVersion == 4) {
+            var offset = 10
+            if ((flags and 0x40) != 0 && offset + 4 <= maxSearch) {
+                val extSize = if (majorVersion == 4) {
+                    ((buffer[offset].toInt() and 0x7F) shl 21) or
+                            ((buffer[offset + 1].toInt() and 0x7F) shl 14) or
+                            ((buffer[offset + 2].toInt() and 0x7F) shl 7) or
+                            (buffer[offset + 3].toInt() and 0x7F)
+                } else {
+                    ((buffer[offset].toInt() and 0xFF) shl 24) or
+                            ((buffer[offset + 1].toInt() and 0xFF) shl 16) or
+                            ((buffer[offset + 2].toInt() and 0xFF) shl 8) or
+                            (buffer[offset + 3].toInt() and 0xFF)
+                }
+                offset += (4 + extSize).coerceAtLeast(4)
+            }
+
+            while (offset + 10 <= maxSearch) {
+                if (buffer[offset] == 0.toByte()) break
+                val id = String(buffer, offset, 4, Charsets.US_ASCII)
+                if (!id.all { (it in 'A'..'Z') || (it in '0'..'9') }) break
+
+                val frameSize = if (majorVersion == 4) {
+                    ((buffer[offset + 4].toInt() and 0x7F) shl 21) or
+                            ((buffer[offset + 5].toInt() and 0x7F) shl 14) or
+                            ((buffer[offset + 6].toInt() and 0x7F) shl 7) or
+                            (buffer[offset + 7].toInt() and 0x7F)
+                } else {
+                    ((buffer[offset + 4].toInt() and 0xFF) shl 24) or
+                            ((buffer[offset + 5].toInt() and 0xFF) shl 16) or
+                            ((buffer[offset + 6].toInt() and 0xFF) shl 8) or
+                            (buffer[offset + 7].toInt() and 0xFF)
+                }
+
+                if (frameSize <= 0 || offset + 10 + frameSize > maxSearch) break
+
+                val encoding = buffer[offset + 10].toInt() and 0xFF
+                val text = decodeId3String(buffer, offset + 11, frameSize - 1, encoding)
+
+                when (id) {
+                    "TIT2" -> if (title == null && text.isNotBlank()) title = text
+                    "TPE1" -> if (artist == null && text.isNotBlank()) artist = text
+                    "TALB" -> if (album == null && text.isNotBlank()) album = text
+                    "TLEN" -> {
+                        val ms = text.toLongOrNull() ?: text.filter { it.isDigit() }.toLongOrNull()
+                        if (ms != null && ms > 1000L && durationSec <= 0L) {
+                            durationSec = ms / 1000L
+                        }
+                    }
+                }
+                offset += 10 + frameSize
+            }
+        }
+
+        return AudioTrackMetadata(
+            title = title,
+            artist = artist,
+            album = album,
+            durationSec = durationSec
+        )
+    }
+
+    private fun decodeId3String(buffer: ByteArray, offset: Int, length: Int, encoding: Int): String {
+        if (length <= 0 || offset < 0 || offset + length > buffer.size) return ""
+        return try {
+            val s = when (encoding) {
+                0 -> String(buffer, offset, length, Charsets.ISO_8859_1)
+                1 -> String(buffer, offset, length, Charsets.UTF_16)
+                2 -> String(buffer, offset, length, Charsets.UTF_16BE)
+                3 -> String(buffer, offset, length, Charsets.UTF_8)
+                else -> String(buffer, offset, length, Charsets.UTF_8)
+            }
+            s.trim('\u0000', ' ', '\t', '\r', '\n')
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun parseFlacVorbisComment(buffer: ByteArray, len: Int): AudioTrackMetadata {
+        var title: String? = null
+        var artist: String? = null
+        var album: String? = null
+
+        try {
+            var blockOffset = 4
+            while (blockOffset + 4 <= len) {
+                val b0 = buffer[blockOffset].toInt() and 0xFF
+                val isLast = (b0 and 0x80) != 0
+                val blockType = b0 and 0x7F
+                val blockSize = ((buffer[blockOffset + 1].toInt() and 0xFF) shl 16) or
+                        ((buffer[blockOffset + 2].toInt() and 0xFF) shl 8) or
+                        (buffer[blockOffset + 3].toInt() and 0xFF)
+
+                val dataStart = blockOffset + 4
+                if (blockType == 4 && dataStart + blockSize <= len) {
+                    var ptr = dataStart
+                    val vendorLen = (buffer[ptr].toInt() and 0xFF) or
+                            ((buffer[ptr + 1].toInt() and 0xFF) shl 8) or
+                            ((buffer[ptr + 2].toInt() and 0xFF) shl 16) or
+                            ((buffer[ptr + 3].toInt() and 0xFF) shl 24)
+                    ptr += 4 + vendorLen
+                    if (ptr + 4 <= dataStart + blockSize) {
+                        val userCommentCount = (buffer[ptr].toInt() and 0xFF) or
+                                ((buffer[ptr + 1].toInt() and 0xFF) shl 8) or
+                                ((buffer[ptr + 2].toInt() and 0xFF) shl 16) or
+                                ((buffer[ptr + 3].toInt() and 0xFF) shl 24)
+                        ptr += 4
+                        for (c in 0 until userCommentCount) {
+                            if (ptr + 4 > dataStart + blockSize) break
+                            val cLen = (buffer[ptr].toInt() and 0xFF) or
+                                    ((buffer[ptr + 1].toInt() and 0xFF) shl 8) or
+                                    ((buffer[ptr + 2].toInt() and 0xFF) shl 16) or
+                                    ((buffer[ptr + 3].toInt() and 0xFF) shl 24)
+                            ptr += 4
+                            if (cLen > 0 && ptr + cLen <= dataStart + blockSize) {
+                                val commentStr = String(buffer, ptr, cLen, Charsets.UTF_8)
+                                val eqIdx = commentStr.indexOf('=')
+                                if (eqIdx > 0) {
+                                    val key = commentStr.substring(0, eqIdx).trim().uppercase()
+                                    val value = commentStr.substring(eqIdx + 1).trim()
+                                    when (key) {
+                                        "TITLE" -> if (title == null) title = value
+                                        "ARTIST" -> if (artist == null) artist = value
+                                        "ALBUM" -> if (album == null) album = value
+                                    }
+                                }
+                            }
+                            ptr += cLen
+                        }
+                    }
+                }
+
+                blockOffset = dataStart + blockSize
+                if (isLast) break
+            }
+        } catch (_: Exception) {}
+
+        return AudioTrackMetadata(title = title, artist = artist, album = album)
     }
 
     private fun parseMp3Duration(buffer: ByteArray, len: Int, fileSize: Long): Long {
@@ -223,7 +512,6 @@ object AudioMetadataHelper {
 
     private fun parseFlacDuration(buffer: ByteArray, len: Int): Long {
         try {
-            // Primer bloque STREAMINFO a partir del byte 4
             val blockType = buffer[4].toInt() and 0x7F
             if (blockType == 0 && len >= 26) {
                 val b14 = buffer[14].toLong() and 0xFF

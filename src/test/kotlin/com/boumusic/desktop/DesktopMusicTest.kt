@@ -108,4 +108,30 @@ class DesktopMusicTest {
         assertEquals("10.0.0.5", h4)
         assertEquals(990, p4)
     }
+
+    @Test
+    fun testFileNameMetadataParser() {
+        val (a1, t1) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata("Queen - Bohemian Rhapsody.mp3")
+        assertEquals("Queen", a1)
+        assertEquals("Bohemian Rhapsody", t1)
+
+        val (a2, t2) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata("01. Queen - Bohemian Rhapsody.mp3")
+        assertEquals("Queen", a2)
+        assertEquals("Bohemian Rhapsody", t2)
+
+        val (a3, t3) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata("01 - Daft Punk - One More Time.flac")
+        assertEquals("Daft Punk", a3)
+        assertEquals("One More Time", t3)
+
+        val (a4, t4) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata(
+            "05 Shape of You (Official Music Video).mp3",
+            parentFolderName = "Ed Sheeran"
+        )
+        assertEquals("Ed Sheeran", a4)
+        assertEquals("Shape of You", t4)
+
+        val (a5, t5) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata("AC_DC - Highway to Hell.wav")
+        assertEquals("AC_DC", a5)
+        assertEquals("Highway to Hell", t5)
+    }
 }

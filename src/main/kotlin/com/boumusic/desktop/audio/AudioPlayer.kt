@@ -62,6 +62,7 @@ class AudioPlayer {
 
     var onSongFinished: (() -> Unit)? = null
     var onSongPlaybackLogged: ((Song, Long) -> Unit)? = null
+    var onMetadataUpdated: ((Song) -> Unit)? = null
 
     fun play(song: Song, startFromSec: Long = 0L, streamProvider: (() -> InputStream)? = null) {
         val previousSong = _currentSong.value
@@ -122,9 +123,10 @@ class AudioPlayer {
 
             val buffered = BufferedInputStream(rawStream, 256 * 1024)
 
-            // Detección precisa de duración desde cabecera de audio (MP3, FLAC, WAV)
+            // Detección precisa de metadatos (ID3v2, FLAC Vorbis, duración) desde la cabecera
             val localFileSize = if (!song.isRemote) File(song.path).takeIf { it.exists() }?.length() ?: 0L else 0L
-            var detectedDurationSec = AudioMetadataHelper.detectDurationSec(buffered, localFileSize)
+            val meta = AudioMetadataHelper.extractMetadata(buffered, localFileSize)
+            var detectedDurationSec = meta.durationSec
 
             inStream = AudioSystem.getAudioInputStream(buffered)
             val baseFormat = inStream.format
@@ -141,7 +143,25 @@ class AudioPlayer {
 
             if (detectedDurationSec > 0L) {
                 _durationSec.value = detectedDurationSec
-                _currentSong.value = _currentSong.value?.takeIf { it.id == song.id }?.copy(duration = detectedDurationSec * 1000L)
+            }
+
+            // Enriquecer la canción actual con título, artista, álbum y duración reales
+            val cur = _currentSong.value
+            if (cur != null && cur.id == song.id) {
+                val newDuration = if (detectedDurationSec > 0L) detectedDurationSec * 1000L else cur.duration
+                val newTitle = meta.title?.takeIf { it.isNotBlank() } ?: cur.title
+                val newArtist = meta.artist?.takeIf { it.isNotBlank() } ?: cur.artist
+                val newAlbum = meta.album?.takeIf { it.isNotBlank() } ?: cur.album
+                if (newDuration != cur.duration || newTitle != cur.title || newArtist != cur.artist || newAlbum != cur.album) {
+                    val updated = cur.copy(
+                        duration = newDuration,
+                        title = newTitle,
+                        artist = newArtist,
+                        album = newAlbum
+                    )
+                    _currentSong.value = updated
+                    onMetadataUpdated?.invoke(updated)
+                }
             }
 
             val sampleRate = if (baseFormat.sampleRate > 0) baseFormat.sampleRate else 44100.0f

@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.boumusic.desktop.audio.AudioMetadataHelper
 import com.boumusic.desktop.model.FtpConfig
 import com.boumusic.desktop.model.FtpItem
 import com.boumusic.desktop.model.Song
@@ -73,6 +74,8 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
     val serverItems by viewModel.serverItems.collectAsState()
     val isLoading by viewModel.isServerLoading.collectAsState()
     val error by viewModel.serverError.collectAsState()
+    val isScanningServerAudio by viewModel.isScanningServerAudio.collectAsState()
+    val serverScanStatus by viewModel.serverScanStatus.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -169,11 +172,59 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
                     )
                 }
 
-                Button(
-                    onClick = { viewModel.disconnectServer() },
-                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = { viewModel.playServerShuffleAll() },
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricPurple),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(34.dp),
+                        enabled = !isScanningServerAudio
+                    ) {
+                        if (isScanningServerAudio) {
+                            CircularProgressIndicator(
+                                color = TextPrimary,
+                                modifier = Modifier.size(15.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Buscando...", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(Icons.Default.Shuffle, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Aleatorio Todo el Servidor", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Button(
+                        onClick = { viewModel.disconnectServer() },
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text("Desconectar", color = TextSecondary, fontSize = 11.sp)
+                    }
+                }
+            }
+
+            if (isScanningServerAudio) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(ElectricPurple.copy(alpha = 0.2f))
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
-                    Text("Desconectar", color = TextSecondary, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(color = NeonCyan, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (serverScanStatus.isNotBlank()) serverScanStatus else "Buscando todas las canciones en las carpetas del servidor...",
+                            color = TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 
@@ -291,7 +342,7 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
                             ) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(15.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Reproducir", color = DarkBackground, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Reproducir carpeta", color = DarkBackground, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
                             Button(
@@ -302,7 +353,7 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
                             ) {
                                 Icon(Icons.Default.Shuffle, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(15.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Aleatorio", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Aleatorio carpeta", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -324,12 +375,16 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
                                 }
                             },
                             onAddToPlaylist = {
+                                val (parsedArtist, parsedTitle) = AudioMetadataHelper.parseFileNameMetadata(
+                                    fileName = item.name,
+                                    parentFolderName = serverPath
+                                )
                                 val s = Song(
                                     id = item.path.hashCode().toLong(),
-                                    title = item.name.substringBeforeLast("."),
-                                    artist = config.name,
-                                    album = config.protocolLabel,
-                                    duration = if (item.size > 0) item.size else 0L,
+                                    title = parsedTitle,
+                                    artist = parsedArtist,
+                                    album = config.name,
+                                    duration = if (item.size > 1024L) (item.size * 1000L) / 24000L else 0L,
                                     path = item.path,
                                     isRemote = true,
                                     remoteHost = config.host,
