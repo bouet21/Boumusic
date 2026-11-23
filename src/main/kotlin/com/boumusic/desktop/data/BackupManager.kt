@@ -11,7 +11,8 @@ import java.util.UUID
 data class DesktopBackupData(
     val servers: List<FtpConfig>,
     val playlists: List<Playlist>,
-    val settings: Map<String, Any>
+    val settings: Map<String, Any>,
+    val statsJson: JSONObject? = null
 )
 
 object BackupManager {
@@ -19,7 +20,8 @@ object BackupManager {
     fun generateBackupJson(
         servers: List<FtpConfig>,
         playlists: List<Playlist>,
-        settings: Map<String, Any> = emptyMap()
+        settings: Map<String, Any> = emptyMap(),
+        statsJson: JSONObject? = null
     ): String {
         val root = JSONObject()
         root.put("app", "Boumusic")
@@ -76,6 +78,10 @@ object BackupManager {
         val settingsObj = JSONObject()
         for ((k, v) in settings) settingsObj.put(k, v)
         root.put("settings", settingsObj)
+
+        if (statsJson != null) {
+            root.put("stats", statsJson)
+        }
 
         return root.toString(2)
     }
@@ -156,7 +162,8 @@ object BackupManager {
             }
         }
 
-        return DesktopBackupData(servers, playlists, settings)
+        val statsObj = root.optJSONObject("stats")
+        return DesktopBackupData(servers, playlists, settings, statsObj)
     }
 
     fun exportPlaylistToM3u8(playlist: Playlist, allSongs: List<Song>): String {

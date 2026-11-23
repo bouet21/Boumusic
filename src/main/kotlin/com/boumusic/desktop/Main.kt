@@ -20,10 +20,12 @@ import com.boumusic.desktop.ui.components.Sidebar
 import com.boumusic.desktop.ui.components.SleepTimerDialog
 import com.boumusic.desktop.ui.components.SongDetailsDialog
 import com.boumusic.desktop.ui.screens.BackupScreen
+import com.boumusic.desktop.ui.screens.EqualizerScreen
 import com.boumusic.desktop.ui.screens.LibraryScreen
 import com.boumusic.desktop.ui.screens.PlaylistsScreen
 import com.boumusic.desktop.ui.screens.QueueScreen
 import com.boumusic.desktop.ui.screens.ServersScreen
+import com.boumusic.desktop.ui.screens.WrappedScreen
 import com.boumusic.desktop.ui.theme.BoumusicDesktopTheme
 import com.boumusic.desktop.viewmodel.DesktopMusicViewModel
 import com.boumusic.desktop.viewmodel.DesktopSection
@@ -39,7 +41,7 @@ fun main() = application {
 
     Window(
         onCloseRequest = ::exitApplication,
-        title = "Boumusic Desktop — v1.0.1 (Windows / Linux)",
+        title = "Boumusic Desktop — v1.0.2 (Windows / Linux)",
         state = windowState
     ) {
         BoumusicDesktopTheme {
@@ -68,6 +70,8 @@ fun main() = application {
                             DesktopSection.QUEUE -> QueueScreen(viewModel = viewModel)
                             DesktopSection.SERVERS -> ServersScreen(viewModel = viewModel)
                             DesktopSection.BACKUP -> BackupScreen(viewModel = viewModel)
+                            DesktopSection.EQUALIZER -> EqualizerScreen(viewModel = viewModel)
+                            DesktopSection.WRAPPED -> WrappedScreen(viewModel = viewModel)
                         }
                     }
                 }

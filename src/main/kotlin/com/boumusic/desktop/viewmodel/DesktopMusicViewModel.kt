@@ -2,6 +2,7 @@ package com.boumusic.desktop.viewmodel
 
 import com.boumusic.desktop.audio.AudioPlayer
 import com.boumusic.desktop.data.BackupManager
+import com.boumusic.desktop.data.HistoryAndStatsManager
 import com.boumusic.desktop.data.MusicRepository
 import com.boumusic.desktop.ftp.FtpManager
 import com.boumusic.desktop.model.FtpConfig
@@ -34,7 +35,9 @@ enum class DesktopSection(val title: String) {
     PLAYLISTS("Listas"),
     QUEUE("Cola de reproducción"),
     SERVERS("Servidores (SMB / FTP)"),
-    BACKUP("Sincronización & Backup")
+    BACKUP("Sincronización & Backup"),
+    EQUALIZER("Ecualizador"),
+    WRAPPED("Boumusic Wrapped")
 }
 
 enum class RepeatMode(val label: String) {
@@ -53,7 +56,8 @@ enum class LibrarySubTab(val title: String) {
 class DesktopMusicViewModel(
     val repository: MusicRepository = MusicRepository(),
     val ftpManager: FtpManager = FtpManager(),
-    val player: AudioPlayer = AudioPlayer()
+    val player: AudioPlayer = AudioPlayer(),
+    val historyManager: HistoryAndStatsManager = HistoryAndStatsManager()
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -557,7 +561,8 @@ class DesktopMusicViewModel(
         deviceName = "PC (" + (System.getenv("COMPUTERNAME") ?: System.getProperty("user.name") ?: "Desktop") + ")",
         serverProvider = { _savedServers.value },
         playlistProvider = { _playlists.value },
-        onDataReceived = { newServers, newPlaylists ->
+        statsProvider = { historyManager.exportSyncData() },
+        onDataReceived = { newServers, newPlaylists, statsJson ->
             scope.launch {
                 val currentServers = _savedServers.value.toMutableList()
                 for (s in newServers) {
@@ -574,6 +579,10 @@ class DesktopMusicViewModel(
                 }
                 _playlists.value = currentPlaylists
                 repository.savePlaylists(currentPlaylists)
+
+                if (statsJson != null) {
+                    historyManager.mergeSyncData(statsJson)
+                }
             }
         }
     )
@@ -592,6 +601,9 @@ class DesktopMusicViewModel(
 
     init {
         player.onSongFinished = { playNext(fromUser = false) }
+        player.onSongPlaybackLogged = { song, durationMs ->
+            historyManager.recordPlayback(song, durationMs)
+        }
         // Carga ultra-rápida desde caché local para arranque instantáneo (< 2ms)
         val cached = repository.loadCachedSongs()
         _songs.value = cached

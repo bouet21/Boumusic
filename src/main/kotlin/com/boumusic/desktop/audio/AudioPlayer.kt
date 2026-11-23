@@ -55,9 +55,21 @@ class AudioPlayer {
     private val _volume = MutableStateFlow(0.85f)
     val volume: StateFlow<Float> = _volume.asStateFlow()
 
+    val equalizer = DesktopEqualizer()
+
+    @Volatile
+    private var softwareVolume: Float = 0.85f
+
     var onSongFinished: (() -> Unit)? = null
+    var onSongPlaybackLogged: ((Song, Long) -> Unit)? = null
 
     fun play(song: Song, startFromSec: Long = 0L, streamProvider: (() -> InputStream)? = null) {
+        val previousSong = _currentSong.value
+        val playedSec = _currentPositionSec.value
+        if (previousSong != null && playedSec >= 5L) {
+            onSongPlaybackLogged?.invoke(previousSong, playedSec * 1000L)
+        }
+
         val generation: Long
         synchronized(lock) {
             generation = ++currentGeneration
@@ -166,10 +178,20 @@ class AudioPlayer {
 
             line = AudioSystem.getLine(info) as SourceDataLine
 
-            // Búfer amplio (~750ms de audio) para evitar cualquier tipo de corte o "ralladura" por buffer underrun
-            val lineBufferSize = (sampleRate * channels * 2 * 0.75).toInt().coerceAtLeast(65536)
+            equalizer.setSampleRate(sampleRate)
+
+            // Búfer ultrarrápido (~80ms de audio) para respuesta instantánea de volumen y ecualizador sin cortes
+            val lineBufferSize = (sampleRate * channels * 2 * 0.08).toInt().coerceIn(8192, 16384)
             line.open(decodedFormat, lineBufferSize)
             line.start()
+
+            // Fijar ganancia de hardware a 0 dB para que no haya atenuación doble
+            try {
+                if (line.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                    val gainControl = line.getControl(FloatControl.Type.MASTER_GAIN) as FloatControl
+                    gainControl.value = 0f.coerceIn(gainControl.minimum, gainControl.maximum)
+                }
+            } catch (ignored: Exception) {}
 
             synchronized(lock) {
                 if (generation != currentGeneration) {
@@ -182,7 +204,6 @@ class AudioPlayer {
                 activeLine = line
             }
 
-            applyVolumeToLine(line, _volume.value)
             _isPlaying.value = true
 
             val bytesPerSecond = (sampleRate * channels * 2).toLong()
@@ -198,7 +219,7 @@ class AudioPlayer {
                 }
             }
 
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(4096)
             var bytesRead: Int
             var totalBytesRead = if (startFromSec > 0) startFromSec * bytesPerSecond else 0L
             var naturalEof = false
@@ -214,6 +235,9 @@ class AudioPlayer {
                     naturalEof = true
                     break
                 }
+
+                // Procesamiento instantáneo de ecualizador y volumen en PCM
+                equalizer.processPcmBuffer(buffer, bytesRead, channels, softwareVolume)
 
                 line.write(buffer, 0, bytesRead)
                 totalBytesRead += bytesRead
@@ -257,6 +281,11 @@ class AudioPlayer {
 
         // Se invoca el paso a la siguiente canción DESPUÉS de haber liberado todos los recursos (línea de audio y sockets)
         if (triggerFinished && generation == currentGeneration) {
+            val finishedSong = _currentSong.value
+            val playedSec = _currentPositionSec.value
+            if (finishedSong != null && playedSec >= 5L) {
+                onSongPlaybackLogged?.invoke(finishedSong, playedSec * 1000L)
+            }
             scope.launch {
                 delay(120)
                 if (generation == currentGeneration) {
@@ -316,7 +345,7 @@ class AudioPlayer {
     fun setVolume(vol: Float) {
         val clamped = vol.coerceIn(0f, 1f)
         _volume.value = clamped
-        activeLine?.let { applyVolumeToLine(it, clamped) }
+        softwareVolume = clamped
     }
 
     private fun stopActiveLineAndStream() {

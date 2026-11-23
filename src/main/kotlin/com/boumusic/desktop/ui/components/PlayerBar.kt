@@ -1,6 +1,7 @@
 package com.boumusic.desktop.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeMute
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -34,6 +36,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -246,33 +251,86 @@ fun PlayerBar(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Control de volumen
+            // Botón de Ecualizador
+            IconButton(
+                onClick = {
+                    if (currentSection == DesktopSection.EQUALIZER) {
+                        viewModel.setSection(DesktopSection.LIBRARY)
+                    } else {
+                        viewModel.setSection(DesktopSection.EQUALIZER)
+                    }
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.GraphicEq,
+                    contentDescription = "Ecualizador",
+                    tint = if (currentSection == DesktopSection.EQUALIZER) NeonCyan else TextMuted,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Control de volumen estilizado con respuesta instantánea y porcentaje
             val volIcon = when {
                 volume <= 0.01f -> Icons.AutoMirrored.Filled.VolumeMute
                 volume < 0.5f -> Icons.AutoMirrored.Filled.VolumeDown
                 else -> Icons.AutoMirrored.Filled.VolumeUp
             }
 
-            IconButton(
-                onClick = {
-                    if (volume > 0f) viewModel.player.setVolume(0f) else viewModel.player.setVolume(0.85f)
-                },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(volIcon, contentDescription = "Volumen", tint = TextSecondary, modifier = Modifier.size(18.dp))
-            }
+            var lastNonZeroVol by remember { mutableStateOf(0.85f) }
 
-            Slider(
-                value = volume,
-                onValueChange = { viewModel.player.setVolume(it) },
-                valueRange = 0f..1f,
-                modifier = Modifier.width(90.dp).height(12.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor = NeonCyan,
-                    activeTrackColor = NeonCyan,
-                    inactiveTrackColor = DarkCardBorder
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(DarkBackground.copy(alpha = 0.7f))
+                    .border(1.dp, if (volume > 0.01f) NeonCyan.copy(alpha = 0.25f) else DarkCardBorder, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        if (volume > 0.01f) {
+                            lastNonZeroVol = volume
+                            viewModel.player.setVolume(0f)
+                        } else {
+                            viewModel.player.setVolume(if (lastNonZeroVol > 0.05f) lastNonZeroVol else 0.85f)
+                        }
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        volIcon,
+                        contentDescription = "Volumen",
+                        tint = if (volume > 0.01f) NeonCyan else TextMuted,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+
+                Slider(
+                    value = volume,
+                    onValueChange = { newVol ->
+                        if (newVol > 0.01f) lastNonZeroVol = newVol
+                        viewModel.player.setVolume(newVol)
+                    },
+                    valueRange = 0f..1f,
+                    modifier = Modifier.width(92.dp).height(12.dp),
+                    colors = SliderDefaults.colors(
+                        thumbColor = NeonCyan,
+                        activeTrackColor = NeonCyan,
+                        inactiveTrackColor = DarkCardBorder
+                    )
                 )
-            )
+
+                Text(
+                    text = "${(volume * 100).toInt()}%",
+                    color = if (volume > 0.01f) TextPrimary else TextMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.width(36.dp).padding(start = 4.dp)
+                )
+            }
         }
     }
 }

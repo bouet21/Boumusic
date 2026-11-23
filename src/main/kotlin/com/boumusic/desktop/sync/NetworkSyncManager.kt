@@ -47,7 +47,8 @@ class NetworkSyncManager(
     val udpPort: Int = 42424,
     private val serverProvider: () -> List<FtpConfig>,
     private val playlistProvider: () -> List<Playlist>,
-    private val onDataReceived: (servers: List<FtpConfig>, playlists: List<Playlist>) -> Unit
+    private val statsProvider: (() -> org.json.JSONObject?)? = null,
+    private val onDataReceived: (servers: List<FtpConfig>, playlists: List<Playlist>, stats: org.json.JSONObject?) -> Unit
 ) {
 
     val deviceId: String = "desktop-" + UUID.randomUUID().toString().take(8)
@@ -193,7 +194,7 @@ class NetworkSyncManager(
                 }
 
                 if (exchange.requestMethod.equals("GET", ignoreCase = true)) {
-                    val json = BackupManager.generateBackupJson(serverProvider(), playlistProvider())
+                    val json = BackupManager.generateBackupJson(serverProvider(), playlistProvider(), statsJson = statsProvider?.invoke())
                     val bytes = json.toByteArray(Charsets.UTF_8)
                     exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
                     exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
@@ -203,7 +204,7 @@ class NetworkSyncManager(
                 } else if (exchange.requestMethod.equals("POST", ignoreCase = true)) {
                     val body = exchange.requestBody.readBytes().toString(Charsets.UTF_8)
                     val data = BackupManager.parseBackupJson(body)
-                    onDataReceived(data.servers, data.playlists)
+                    onDataReceived(data.servers, data.playlists, data.statsJson)
 
                     val resp = """{"success":true,"servers":${data.servers.size},"playlists":${data.playlists.size}}"""
                     val bytes = resp.toByteArray(Charsets.UTF_8)
@@ -443,7 +444,7 @@ class NetworkSyncManager(
                 _syncStatus.value = "Sincronizando con ${device.name}..."
 
                 // 1. Enviar datos locales (POST)
-                val localJson = BackupManager.generateBackupJson(serverProvider(), playlistProvider())
+                val localJson = BackupManager.generateBackupJson(serverProvider(), playlistProvider(), statsJson = statsProvider?.invoke())
                 val postReq = Request.Builder()
                     .url("http://${device.ip}:${device.port}/api/sync")
                     .post(localJson.toRequestBody("application/json; charset=utf-8".toMediaType()))
@@ -461,7 +462,7 @@ class NetworkSyncManager(
 
                 if (body.isNotBlank()) {
                     val remoteData = BackupManager.parseBackupJson(body)
-                    onDataReceived(remoteData.servers, remoteData.playlists)
+                    onDataReceived(remoteData.servers, remoteData.playlists, remoteData.statsJson)
                 }
 
                 lastSyncTimes[device.id] = System.currentTimeMillis()

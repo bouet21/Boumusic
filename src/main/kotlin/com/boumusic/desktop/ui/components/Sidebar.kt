@@ -17,9 +17,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -88,7 +90,7 @@ fun Sidebar(
                     color = TextPrimary
                 )
                 Text(
-                    text = "PC Desktop v1.0.1",
+                    text = "PC Desktop v1.0.2",
                     fontSize = 10.sp,
                     color = NeonCyan,
                     fontWeight = FontWeight.SemiBold
@@ -140,6 +142,24 @@ fun Sidebar(
             icon = Icons.Default.CloudSync,
             isSelected = currentSection == DesktopSection.BACKUP,
             onClick = { viewModel.setSection(DesktopSection.BACKUP) }
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        SidebarItem(
+            title = "Ecualizador",
+            icon = Icons.Default.GraphicEq,
+            isSelected = currentSection == DesktopSection.EQUALIZER,
+            onClick = { viewModel.setSection(DesktopSection.EQUALIZER) }
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        SidebarItem(
+            title = "Boumusic Wrapped",
+            icon = Icons.Default.AutoAwesome,
+            isSelected = currentSection == DesktopSection.WRAPPED,
+            onClick = { viewModel.setSection(DesktopSection.WRAPPED) }
         )
 
         Spacer(modifier = Modifier.weight(1f))
