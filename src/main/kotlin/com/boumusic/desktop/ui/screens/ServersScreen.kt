@@ -388,7 +388,8 @@ fun ServersScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifie
                                     path = item.path,
                                     isRemote = true,
                                     remoteHost = config.host,
-                                    remotePath = item.path
+                                    remotePath = item.path,
+                                    fileSize = if (item.size > 0L) item.size else 0L
                                 )
                                 viewModel.showAddToPlaylistDialog.value = s
                             },

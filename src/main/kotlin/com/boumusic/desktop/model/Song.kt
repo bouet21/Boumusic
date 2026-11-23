@@ -12,7 +12,8 @@ data class Song(
     val isRemote: Boolean = false,
     val remoteHost: String = "",
     val remotePath: String = "",
-    val genre: String = "Varios"
+    val genre: String = "Varios",
+    val fileSize: Long = 0L
 ) {
     val formattedDuration: String
         get() {

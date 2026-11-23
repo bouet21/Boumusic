@@ -47,7 +47,8 @@ class MusicRepository {
                             album = o.optString("album", "Álbum"),
                             duration = o.optLong("duration", 0L),
                             path = path,
-                            isRemote = false
+                            isRemote = false,
+                            fileSize = File(path).takeIf { it.exists() }?.length() ?: 0L
                         )
                     )
                 }
@@ -105,7 +106,8 @@ class MusicRepository {
                             album = file.parentFile?.name ?: "Álbum",
                             duration = durationMs,
                             path = file.absolutePath,
-                            isRemote = false
+                            isRemote = false,
+                            fileSize = file.length()
                         )
                     )
                 }

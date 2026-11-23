@@ -79,8 +79,9 @@ class AudioPlayer {
         }
 
         _currentSong.value = song
-        if (song.duration in 1..86400000) {
-            _durationSec.value = song.duration / 1000L
+        val initSec = if (song.duration in 1..86400000) song.duration / 1000L else 0L
+        if (initSec > 0L) {
+            _durationSec.value = initSec
         }
         _currentPositionSec.value = startFromSec
         isPaused = false
@@ -124,8 +125,12 @@ class AudioPlayer {
             val buffered = BufferedInputStream(rawStream, 256 * 1024)
 
             // Detección precisa de metadatos (ID3v2, FLAC Vorbis, duración) desde la cabecera
-            val localFileSize = if (!song.isRemote) File(song.path).takeIf { it.exists() }?.length() ?: 0L else 0L
-            val meta = AudioMetadataHelper.extractMetadata(buffered, localFileSize)
+            val effectiveFileSize = if (!song.isRemote) {
+                File(song.path).takeIf { it.exists() }?.length() ?: 0L
+            } else {
+                song.fileSize
+            }
+            val meta = AudioMetadataHelper.extractMetadata(buffered, effectiveFileSize)
             var detectedDurationSec = meta.durationSec
 
             inStream = AudioSystem.getAudioInputStream(buffered)
@@ -216,16 +221,20 @@ class AudioPlayer {
 
             val bytesPerSecond = (sampleRate * channels * 2).toLong()
 
-            // Si hay que posicionarse en un segundo concreto (seek)
+            // Posicionamiento de búsqueda rápido y seguro (Seek)
             if (startFromSec > 0 && bytesPerSecond > 0) {
-                val bytesToSkip = startFromSec * bytesPerSecond
-                var skipped = 0L
-                val skipBuf = ByteArray(8192)
-                while (skipped < bytesToSkip && generation == currentGeneration) {
-                    val toRead = (bytesToSkip - skipped).coerceAtMost(skipBuf.size.toLong()).toInt()
-                    val r = decodedStream.read(skipBuf, 0, toRead)
-                    if (r <= 0) break
-                    skipped += r
+                var remainingToSkip = startFromSec * bytesPerSecond
+                val skipBuf = ByteArray(32768)
+                while (remainingToSkip > 0 && generation == currentGeneration) {
+                    val skipped = try { decodedStream.skip(remainingToSkip) } catch (_: Exception) { 0L }
+                    if (skipped > 0) {
+                        remainingToSkip -= skipped
+                    } else {
+                        val toRead = remainingToSkip.coerceAtMost(skipBuf.size.toLong()).toInt()
+                        val r = decodedStream.read(skipBuf, 0, toRead)
+                        if (r <= 0) break
+                        remainingToSkip -= r
+                    }
                 }
             }
 
@@ -254,7 +263,9 @@ class AudioPlayer {
 
                 if (bytesPerSecond > 0) {
                     val currentSec = totalBytesRead / bytesPerSecond
-                    _currentPositionSec.value = currentSec
+                    if (currentSec != _currentPositionSec.value) {
+                        _currentPositionSec.value = currentSec
+                    }
                 }
             }
 

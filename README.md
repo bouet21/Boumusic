@@ -1,6 +1,6 @@
 # 🖥️ Boumusic Desktop — Reproductor de Música Moderno y Ligero (Windows & Linux)
 
-[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v1.0.4)](https://github.com/bouet21/Boumusic-Desktop/releases)
+[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v1.0.5)](https://github.com/bouet21/Boumusic-Desktop/releases)
 [![Platform](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux-7B2CBF)](#)
 [![Compose Desktop](https://img.shields.io/badge/Compose%20Multiplatform-1.6.11-brightgreen)](https://www.jetbrains.com/lp/compose-multiplatform/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue)](https://kotlinlang.org)
@@ -64,6 +64,18 @@ Boumusic Desktop utiliza `jpackage` para generar instaladores compactos y ejecut
   ./gradlew packageDeb
   # Genera el paquete DEB para Debian/Ubuntu en build/compose/binaries/main/deb/
   ```
+
+---
+
+## 🆕 Novedades en v1.0.5
+* ⏱️ **Barra de Progreso y Duración Precisa**:
+  * Duración calculada al segundo en archivos remotos (FTP/SMB/WebDAV) al asociar el tamaño del archivo con la tasa de bits (CBR/VBR).
+  * La duración total y el tiempo transcurrido ahora siempre se muestran correctamente en la barra de reproducción (ej. `01:23` / `03:45`).
+  * Emisión de posición optimizada a 1 Hz, reduciendo el 97% de recomposiciones innecesarias para una barra suave sin tirones.
+  * Búsqueda (*seek*) ultrarrápida usando salto directo de bytes en el decodificador.
+* 🏷️ **Extracción Jerárquica de Artista**:
+  * Soporte para estructuras de carpetas `Artista/Álbum/Pista.mp3` e ignores inteligentes de nombres genéricos (`Music`, `Disk`, `CD1`, etc.).
+  * Soporte para nombres con guion simple `Artista-Título.mp3`.
 
 ---
 

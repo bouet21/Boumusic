@@ -178,21 +178,46 @@ object AudioMetadataHelper {
             if (underscoreParts.size == 2) {
                 artistCandidate = underscoreParts[0].trim()
                 titleCandidate = underscoreParts[1].trim()
+            } else {
+                val hyphenParts = clean.split(Regex("""(?<=[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ])-(?=[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ])"""))
+                if (hyphenParts.size == 2 && !hyphenParts[0].all { it.isDigit() }) {
+                    artistCandidate = hyphenParts[0].trim()
+                    titleCandidate = hyphenParts[1].trim()
+                }
             }
         }
 
         var finalTitle = titleCandidate?.ifBlank { null } ?: clean
         var finalArtist = artistCandidate?.ifBlank { null }
 
-        // Si no se encontró artista en el nombre del archivo, comprobar carpeta contenedora
+        // Si no se encontró artista en el nombre del archivo, comprobar la jerarquía de carpetas
         if (finalArtist == null && !parentFolderName.isNullOrBlank()) {
-            val folder = parentFolderName.trim().trim('/', '\\').substringAfterLast("/").substringAfterLast("\\").trim()
+            val segments = parentFolderName.replace('\\', '/')
+                .split('/')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+
             val genericFolders = setOf(
                 "music", "música", "musica", "downloads", "descargas", "boumusic",
-                "desktop", "audio", "canciones", "songs", "sound", "root", "", "/", "\\"
+                "desktop", "audio", "canciones", "songs", "sound", "root", "media",
+                "files", "archivos", "share", "storage", "disk", "", "/"
             )
-            if (folder.lowercase() !in genericFolders && !folder.startsWith("192.") && !folder.startsWith("10.") && !folder.startsWith("172.")) {
-                finalArtist = folder
+
+            val valid = segments.filter { seg ->
+                val lower = seg.lowercase()
+                lower !in genericFolders &&
+                    !lower.startsWith("192.") && !lower.startsWith("10.") && !lower.startsWith("172.") &&
+                    !lower.matches(Regex("""^\d+$""")) &&
+                    !lower.matches(Regex("""^disc\s*\d+.*""", RegexOption.IGNORE_CASE)) &&
+                    !lower.matches(Regex("""^cd\s*\d+.*""", RegexOption.IGNORE_CASE))
+            }
+
+            if (valid.size >= 2) {
+                // Estructura universal estándar: .../Artista/Álbum/
+                finalArtist = valid[valid.size - 2]
+            } else if (valid.isNotEmpty()) {
+                // Estructura directa: .../Artista/
+                finalArtist = valid.last()
             }
         }
 

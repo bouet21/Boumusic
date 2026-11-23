@@ -133,5 +133,16 @@ class DesktopMusicTest {
         val (a5, t5) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata("AC_DC - Highway to Hell.wav")
         assertEquals("AC_DC", a5)
         assertEquals("Highway to Hell", t5)
+
+        val (a6, t6) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata(
+            "01. Bohemian Rhapsody.mp3",
+            parentFolderName = "/Music/Queen/A Night at the Opera/CD1"
+        )
+        assertEquals("Queen", a6)
+        assertEquals("Bohemian Rhapsody", t6)
+
+        val (a7, t7) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata("Nirvana-In Bloom.mp3")
+        assertEquals("Nirvana", a7)
+        assertEquals("In Bloom", t7)
     }
 }

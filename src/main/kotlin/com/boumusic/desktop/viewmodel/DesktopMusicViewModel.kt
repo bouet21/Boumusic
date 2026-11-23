@@ -428,7 +428,8 @@ class DesktopMusicViewModel(
                             path = item.path,
                             isRemote = true,
                             remoteHost = config.host,
-                            remotePath = item.path
+                            remotePath = item.path,
+                            fileSize = if (item.size > 0L) item.size else 0L
                         )
                     }.shuffled()
 
@@ -464,7 +465,8 @@ class DesktopMusicViewModel(
                 path = it.path,
                 isRemote = true,
                 remoteHost = config.host,
-                remotePath = it.path
+                remotePath = it.path,
+                fileSize = if (it.size > 0L) it.size else 0L
             )
         }
         if (audios.isEmpty()) return
@@ -491,7 +493,8 @@ class DesktopMusicViewModel(
                 path = it.path,
                 isRemote = true,
                 remoteHost = config.host,
-                remotePath = it.path
+                remotePath = it.path,
+                fileSize = if (it.size > 0L) it.size else 0L
             )
         }
         if (audioSongs.isEmpty()) return
