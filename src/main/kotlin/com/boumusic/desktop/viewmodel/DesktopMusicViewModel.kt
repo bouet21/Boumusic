@@ -557,9 +557,14 @@ class DesktopMusicViewModel(
     val discoveredDevices: StateFlow<List<NetworkDevice>> = syncManager.discoveredDevices
     val autoSyncDeviceIds: StateFlow<Set<String>> = syncManager.autoSyncDeviceIds
     val syncStatus: StateFlow<String?> = syncManager.syncStatus
+    val isScanning: StateFlow<Boolean> = syncManager.isScanning
+    val localIp: String? get() = syncManager.localIp
+    val httpPort: Int get() = syncManager.actualHttpPort
 
     fun toggleAutoSync(deviceId: String) = syncManager.toggleAutoSync(deviceId)
     fun syncWithDevice(device: NetworkDevice) = syncManager.syncWithDevice(device)
+    fun scanSubnet() = syncManager.scanSubnet()
+    fun connectDirectly(ip: String, onDone: (Boolean, String) -> Unit) = syncManager.connectDirectly(ip, onDone = onDone)
 
     init {
         player.onSongFinished = { playNext(fromUser = false) }

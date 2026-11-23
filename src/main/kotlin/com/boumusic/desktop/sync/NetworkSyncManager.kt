@@ -9,18 +9,20 @@ import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.io.File
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -40,7 +42,7 @@ data class NetworkDevice(
 )
 
 class NetworkSyncManager(
-    val deviceName: String = "PC (${System.getProperty("os.name")})",
+    val deviceName: String = "PC (" + (System.getenv("COMPUTERNAME") ?: System.getProperty("user.name") ?: "Desktop") + ")",
     val httpPort: Int = 8089,
     val udpPort: Int = 42424,
     private val serverProvider: () -> List<FtpConfig>,
@@ -60,6 +62,15 @@ class NetworkSyncManager(
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus: StateFlow<String?> = _syncStatus.asStateFlow()
 
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
+    var actualHttpPort: Int = httpPort
+        private set
+
+    val localIp: String?
+        get() = getLocalWifiIp()
+
     private var udpSocket: DatagramSocket? = null
     private var httpServer: HttpServer? = null
     private var discoveryJob: Job? = null
@@ -71,9 +82,19 @@ class NetworkSyncManager(
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
+    private val fastProbeClient = OkHttpClient.Builder()
+        .connectTimeout(700, TimeUnit.MILLISECONDS)
+        .readTimeout(1200, TimeUnit.MILLISECONDS)
+        .build()
+
     fun start() {
         startHttpServer()
         startUdpDiscovery()
+        // Escaneo inicial en segundo plano tras 1 segundo para encontrar dispositivos que bloqueen UDP broadcast
+        scope.launch {
+            delay(1000)
+            scanSubnet()
+        }
     }
 
     fun stop() {
@@ -89,7 +110,6 @@ class NetworkSyncManager(
             current.remove(deviceId)
         } else {
             current.add(deviceId)
-            // Sincronizar inmediatamente al activarlo
             _discoveredDevices.value.find { it.id == deviceId }?.let { dev ->
                 syncWithDevice(dev)
             }
@@ -97,24 +117,86 @@ class NetworkSyncManager(
         _autoSyncDeviceIds.value = current
     }
 
-    private fun startHttpServer() {
+    fun getLocalWifiIp(): String? {
         try {
-            httpServer = HttpServer.create(InetSocketAddress(httpPort), 0)
-            httpServer?.createContext("/api/sync", SyncHttpHandler())
-            httpServer?.executor = Executors.newFixedThreadPool(4)
+            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                val name = (iface.name + " " + iface.displayName).lowercase()
+                if (name.contains("tailscale") || name.contains("tun") || name.contains("tap") ||
+                    name.contains("wsl") || name.contains("docker") || name.contains("vethernet")) continue
+
+                for (addr in iface.inetAddresses) {
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        val host = addr.hostAddress
+                        if (host != null && !host.startsWith("100.") && !host.startsWith("127.")) {
+                            return host
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return null
+    }
+
+    private fun startHttpServer() {
+        var p = httpPort
+        while (p < httpPort + 10) {
+            try {
+                httpServer = HttpServer.create(InetSocketAddress(p), 0)
+                actualHttpPort = p
+                break
+            } catch (_: Exception) {
+                p++
+            }
+        }
+
+        httpServer?.createContext("/api/sync", SyncHttpHandler())
+        httpServer?.createContext("/api/info", InfoHttpHandler())
+        httpServer?.executor = Executors.newFixedThreadPool(4)
+        try {
             httpServer?.start()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
+    private inner class InfoHttpHandler : HttpHandler {
+        override fun handle(exchange: HttpExchange) {
+            try {
+                val json = """{"app":"Boumusic","platform":"Desktop","id":"$deviceId","name":"$deviceName","port":$actualHttpPort}"""
+                val bytes = json.toByteArray(Charsets.UTF_8)
+                exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
+                exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
+                exchange.sendResponseHeaders(200, bytes.size.toLong())
+                exchange.responseBody.write(bytes)
+                exchange.responseBody.close()
+
+                // Auto-descubrir a quien nos contacta
+                val clientIp = exchange.remoteAddress?.address?.hostAddress
+                if (clientIp != null && clientIp != localIp && !clientIp.startsWith("127.")) {
+                    scope.launch { probeAndAddDevice(clientIp) }
+                }
+            } catch (_: Exception) {
+                try { exchange.sendResponseHeaders(500, -1) } catch (_: Exception) {}
+            }
+        }
+    }
+
     private inner class SyncHttpHandler : HttpHandler {
         override fun handle(exchange: HttpExchange) {
             try {
+                val clientIp = exchange.remoteAddress?.address?.hostAddress
+                if (clientIp != null && clientIp != localIp && !clientIp.startsWith("127.")) {
+                    scope.launch { probeAndAddDevice(clientIp) }
+                }
+
                 if (exchange.requestMethod.equals("GET", ignoreCase = true)) {
                     val json = BackupManager.generateBackupJson(serverProvider(), playlistProvider())
                     val bytes = json.toByteArray(Charsets.UTF_8)
                     exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
+                    exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
                     exchange.sendResponseHeaders(200, bytes.size.toLong())
                     exchange.responseBody.write(bytes)
                     exchange.responseBody.close()
@@ -126,6 +208,7 @@ class NetworkSyncManager(
                     val resp = """{"success":true,"servers":${data.servers.size},"playlists":${data.playlists.size}}"""
                     val bytes = resp.toByteArray(Charsets.UTF_8)
                     exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
+                    exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
                     exchange.sendResponseHeaders(200, bytes.size.toLong())
                     exchange.responseBody.write(bytes)
                     exchange.responseBody.close()
@@ -134,7 +217,7 @@ class NetworkSyncManager(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                exchange.sendResponseHeaders(500, -1)
+                try { exchange.sendResponseHeaders(500, -1) } catch (_: Exception) {}
             }
         }
     }
@@ -146,6 +229,9 @@ class NetworkSyncManager(
             while (interfaces != null && interfaces.hasMoreElements()) {
                 val iface = interfaces.nextElement()
                 if (iface.isLoopback || !iface.isUp) continue
+                val name = (iface.name + " " + iface.displayName).lowercase()
+                if (name.contains("tailscale") || name.contains("tun") || name.contains("tap")) continue
+
                 for (addr in iface.interfaceAddresses) {
                     val b = addr.broadcast
                     if (b != null) list.add(b)
@@ -165,7 +251,6 @@ class NetworkSyncManager(
                 soTimeout = 2000
             }
 
-            // Escuchar broadcasts entrantes
             discoveryJob = scope.launch {
                 val buffer = ByteArray(2048)
                 while (isActive) {
@@ -181,7 +266,7 @@ class NetworkSyncManager(
                             val rId = o.optString("id", "")
                             val rName = o.optString("name", "Dispositivo")
                             val rType = o.optString("type", "DESCONOCIDO")
-                            val rPort = o.optInt("port", 8089)
+                            val rPort = o.optInt("port", actualHttpPort)
 
                             if (rId != deviceId) {
                                 val device = NetworkDevice(
@@ -194,8 +279,7 @@ class NetworkSyncManager(
                                 )
                                 updateDiscoveredDevice(device)
 
-                                // Responder con PONG
-                                val pong = "BOUMUSIC_PONG:{\"id\":\"$deviceId\",\"name\":\"$deviceName\",\"type\":\"PC\",\"port\":$httpPort}"
+                                val pong = "BOUMUSIC_PONG:{\"id\":\"$deviceId\",\"name\":\"$deviceName\",\"type\":\"PC\",\"port\":$actualHttpPort}"
                                 val pongBytes = pong.toByteArray(Charsets.UTF_8)
                                 val pongPacket = DatagramPacket(pongBytes, pongBytes.size, packet.address, packet.port)
                                 udpSocket?.send(pongPacket)
@@ -206,7 +290,7 @@ class NetworkSyncManager(
                             val rId = o.optString("id", "")
                             val rName = o.optString("name", "Dispositivo")
                             val rType = o.optString("type", "DESCONOCIDO")
-                            val rPort = o.optInt("port", 8089)
+                            val rPort = o.optInt("port", actualHttpPort)
 
                             if (rId != deviceId) {
                                 val device = NetworkDevice(
@@ -220,17 +304,14 @@ class NetworkSyncManager(
                                 updateDiscoveredDevice(device)
                             }
                         }
-                    } catch (ignored: Exception) {
-                        // Timeout esperado para chequear cancelación
-                    }
+                    } catch (ignored: Exception) {}
                 }
             }
 
-            // Emitir ping de broadcast cada 5 segundos a todas las interfaces
             broadcastJob = scope.launch {
                 while (isActive) {
                     try {
-                        val ping = "BOUMUSIC_DISCOVERY:{\"id\":\"$deviceId\",\"name\":\"$deviceName\",\"type\":\"PC\",\"port\":$httpPort}"
+                        val ping = "BOUMUSIC_DISCOVERY:{\"id\":\"$deviceId\",\"name\":\"$deviceName\",\"type\":\"PC\",\"port\":$actualHttpPort}"
                         val bytes = ping.toByteArray(Charsets.UTF_8)
                         for (bAddr in getBroadcastAddresses()) {
                             try {
@@ -238,19 +319,103 @@ class NetworkSyncManager(
                                 udpSocket?.send(packet)
                             } catch (_: Exception) {}
                         }
-                    } catch (e: Exception) {
-                        // Puede fallar si no hay interfaz de red activa
-                    }
+                    } catch (_: Exception) {}
 
-                    // Limpiar dispositivos no vistos en > 15s
                     val now = System.currentTimeMillis()
-                    _discoveredDevices.value = _discoveredDevices.value.filter { now - it.lastSeen < 15000 }
-
+                    _discoveredDevices.value = _discoveredDevices.value.filter { now - it.lastSeen < 25000 }
                     delay(5000)
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    suspend fun probeAndAddDevice(ip: String, portCandidate: Int? = null): Boolean {
+        return withContext(Dispatchers.IO) {
+            val portsToTry = if (portCandidate != null) listOf(portCandidate) else listOf(actualHttpPort, 8089, 8090, 8091)
+            for (p in portsToTry) {
+                try {
+                    val req = Request.Builder()
+                        .url("http://$ip:$p/api/info")
+                        .get()
+                        .build()
+                    val resp = fastProbeClient.newCall(req).execute()
+                    if (resp.isSuccessful) {
+                        val body = resp.body?.string() ?: ""
+                        resp.close()
+                        if (body.contains("Boumusic")) {
+                            val o = JSONObject(body)
+                            val rId = o.optString("id", "direct-$ip")
+                            val rName = o.optString("name", "Dispositivo ($ip)")
+                            val rType = o.optString("platform", "Móvil / PC")
+                            val rPort = o.optInt("port", p)
+
+                            if (rId != deviceId) {
+                                val dev = NetworkDevice(
+                                    id = rId,
+                                    name = rName,
+                                    type = rType,
+                                    ip = ip,
+                                    port = rPort,
+                                    lastSeen = System.currentTimeMillis()
+                                )
+                                updateDiscoveredDevice(dev)
+                                return@withContext true
+                            }
+                        }
+                    } else {
+                        resp.close()
+                    }
+                } catch (_: Exception) {}
+            }
+            false
+        }
+    }
+
+    fun scanSubnet(onDone: ((Int) -> Unit)? = null) {
+        val ip = getLocalWifiIp() ?: return
+        val prefix = ip.substringBeforeLast(".") + "."
+        _isScanning.value = true
+        _syncStatus.value = "Buscando en red local ($prefix*)..."
+        scope.launch(Dispatchers.IO) {
+            var found = 0
+            val jobs = (1..254).map { i ->
+                async {
+                    val target = "$prefix$i"
+                    if (target != ip) {
+                        if (probeAndAddDevice(target)) found++
+                    }
+                }
+            }
+            jobs.awaitAll()
+            _isScanning.value = false
+            _syncStatus.value = if (found > 0) "¡Se encontraron $found dispositivo(s)!" else null
+            onDone?.invoke(found)
+        }
+    }
+
+    fun connectDirectly(targetIp: String, port: Int = actualHttpPort, onDone: (Boolean, String) -> Unit) {
+        val cleanIp = targetIp.trim().removePrefix("http://").removePrefix("https://").substringBefore(":")
+        if (cleanIp.isBlank()) {
+            onDone(false, "Introduce una dirección IP válida")
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            _syncStatus.value = "Conectando a $cleanIp..."
+            val ok = probeAndAddDevice(cleanIp, port)
+            if (ok) {
+                val dev = _discoveredDevices.value.find { it.ip == cleanIp }
+                if (dev != null) {
+                    syncWithDevice(dev)
+                    onDone(true, "¡Conectado y sincronizado con ${dev.name}!")
+                } else {
+                    onDone(true, "¡Dispositivo encontrado en $cleanIp!")
+                }
+            } else {
+                _syncStatus.value = null
+                onDone(false, "No se encontró ningún Boumusic activo en $cleanIp:$port. Comprueba la IP y que la app esté abierta.")
+            }
         }
     }
 
@@ -264,7 +429,6 @@ class NetworkSyncManager(
         }
         _discoveredDevices.value = list
 
-        // Si este dispositivo tiene sincronización automática activada y han pasado > 30s desde la última sync
         if (_autoSyncDeviceIds.value.contains(device.id)) {
             val lastSync = lastSyncTimes[device.id] ?: 0L
             if (System.currentTimeMillis() - lastSync > 30000L) {
@@ -278,7 +442,7 @@ class NetworkSyncManager(
             try {
                 _syncStatus.value = "Sincronizando con ${device.name}..."
 
-                // 1. Enviar datos locales al dispositivo remoto (POST)
+                // 1. Enviar datos locales (POST)
                 val localJson = BackupManager.generateBackupJson(serverProvider(), playlistProvider())
                 val postReq = Request.Builder()
                     .url("http://${device.ip}:${device.port}/api/sync")
@@ -286,7 +450,7 @@ class NetworkSyncManager(
                     .build()
                 httpClient.newCall(postReq).execute().close()
 
-                // 2. Obtener datos remotos del dispositivo (GET)
+                // 2. Obtener datos remotos (GET)
                 val getReq = Request.Builder()
                     .url("http://${device.ip}:${device.port}/api/sync")
                     .get()
@@ -306,7 +470,7 @@ class NetworkSyncManager(
                 _syncStatus.value = null
             } catch (e: Exception) {
                 e.printStackTrace()
-                _syncStatus.value = "Error al sincronizar: ${e.message}"
+                _syncStatus.value = "Error al sincronizar con ${device.name}: ${e.message}"
             }
         }
     }

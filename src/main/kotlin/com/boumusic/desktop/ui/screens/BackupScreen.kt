@@ -22,10 +22,12 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -68,6 +70,10 @@ fun BackupScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifier
     val discoveredDevices by viewModel.discoveredDevices.collectAsState()
     val autoSyncIds by viewModel.autoSyncDeviceIds.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
+    val isScanning by viewModel.isScanning.collectAsState()
+
+    var manualIp by remember { mutableStateOf("") }
+    var manualResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
 
     Column(
         modifier = modifier
@@ -86,6 +92,51 @@ fun BackupScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifier
             color = TextSecondary,
             fontSize = 13.sp
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Fila de información local y botón de escaneo activo
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Wifi, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text("Este ordenador", color = TextSecondary, fontSize = 11.sp)
+                    Text(
+                        text = "IP: ${viewModel.localIp ?: "Detectando..."} • Puerto: ${viewModel.httpPort}",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Button(
+                onClick = { viewModel.scanSubnet() },
+                enabled = !isScanning,
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(34.dp)
+            ) {
+                if (isScanning) {
+                    CircularProgressIndicator(color = DarkBackground, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Buscando...", color = DarkBackground, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                } else {
+                    Icon(Icons.Default.Search, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Escanear red local", color = DarkBackground, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -137,7 +188,7 @@ fun BackupScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifier
                             fontSize = 14.sp
                         )
                         Text(
-                            text = "Abre Boumusic en tu móvil Android u otro PC conectado al mismo Wi-Fi para sincronizar automáticamente tus servidores y listas sin cables ni configuraciones.",
+                            text = "Abre Boumusic en tu móvil o pulsa 'Escanear red local'. También puedes conectar directamente por IP abajo.",
                             color = TextSecondary,
                             fontSize = 12.sp
                         )
@@ -229,6 +280,73 @@ fun BackupScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifier
                             }
                         }
                     }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Conexión manual directa por IP (ideal para redes con aislamiento Wi-Fi o VPNs)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                .padding(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "Conectar manualmente por dirección IP",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = "Si tu router bloquea el descubrimiento automático, introduce la IP que muestra la pantalla de sincronización de tu otro dispositivo.",
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = manualIp,
+                        onValueChange = { manualIp = it },
+                        placeholder = { Text("Ej: 192.168.68.67", fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f).height(50.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = DarkSurface,
+                            unfocusedContainerColor = DarkSurface,
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = DarkCardBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Button(
+                        onClick = {
+                            if (manualIp.isNotBlank()) {
+                                viewModel.connectDirectly(manualIp) { ok, msg ->
+                                    manualResult = ok to msg
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.height(50.dp)
+                    ) {
+                        Text("Conectar", color = DarkBackground, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+                manualResult?.let { (success, msg) ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = msg,
+                        color = if (success) NeonCyan else androidx.compose.ui.graphics.Color(0xFFEF4444),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
