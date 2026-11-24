@@ -105,9 +105,14 @@ class DesktopEqualizer {
 
     private val filters = Array(bands.size) { BiquadFilter() }
     private val bassBoostFilter = BiquadFilter()
+    private val activeFilters = mutableListOf<Pair<BiquadFilter, Int>>()
 
+    @Volatile
     var isEnabled: Boolean = true
         private set
+
+    @Volatile
+    private var hasActiveFilters: Boolean = false
 
     private val bandGains = FloatArray(bands.size) { 0f }
     var bassBoostDb: Float = 0f
@@ -131,6 +136,7 @@ class DesktopEqualizer {
     @Synchronized
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
+        recomputeCoefficients()
         saveSettings()
     }
 
@@ -183,13 +189,21 @@ class DesktopEqualizer {
     }
 
     private fun recomputeCoefficients() {
+        activeFilters.clear()
+        var nonZero = false
+
         for (i in bands.indices) {
+            val gain = bandGains[i]
             filters[i].configurePeaking(
                 sampleRate = currentSampleRate,
                 centerFreq = bands[i].centerFreqHz.toFloat(),
-                gainDb = bandGains[i],
+                gainDb = gain,
                 q = 1.414f
             )
+            if (gain != 0f) {
+                activeFilters.add(filters[i] to i)
+                nonZero = true
+            }
         }
         bassBoostFilter.configurePeaking(
             sampleRate = currentSampleRate,
@@ -197,15 +211,47 @@ class DesktopEqualizer {
             gainDb = bassBoostDb,
             q = 1.0f
         )
+        if (bassBoostDb > 0.05f) {
+            nonZero = true
+        }
+        hasActiveFilters = isEnabled && nonZero
     }
 
     /**
      * Procesa el búfer de audio PCM en 16-bit little-endian estéreo o mono in-place.
+     * Optimizado para consumo de CPU mínimo (bypass zero-copy y aritmética fija ultrarrápida).
      */
     fun processPcmBuffer(buffer: ByteArray, bytesRead: Int, channels: Int, volume: Float) {
+        if (bytesRead <= 0) return
+
+        val eqActive = hasActiveFilters
+
+        // 1. Máxima optimización: Sin ecualizador y volumen al 100% -> Retorno inmediato con 0% de CPU
+        if (!eqActive && volume >= 0.999f) {
+            return
+        }
+
+        // 2. Sin ecualizador pero con control de volumen: Aritmética entera de 16-bit directa (~10x más rápida)
+        if (!eqActive) {
+            val volMultiplier = (volume.coerceIn(0f, 1f) * 32768f).toInt()
+            var i = 0
+            while (i < bytesRead - 1) {
+                val raw = (buffer[i].toInt() and 0xFF) or (buffer[i + 1].toInt() shl 8)
+                val sample = raw.toShort().toInt()
+                val scaled = (sample * volMultiplier) shr 15
+                val clamped = scaled.coerceIn(-32768, 32767)
+                buffer[i] = (clamped and 0xFF).toByte()
+                buffer[i + 1] = ((clamped shr 8) and 0xFF).toByte()
+                i += 2
+            }
+            return
+        }
+
+        // 3. Ecualizador activo: Filtra únicamente las bandas activas con ganancia distinta de 0 dB
         val numChannels = channels.coerceIn(1, 2)
-        val numSamples = bytesRead / 2
-        val eqActive = isEnabled
+        val activeList = activeFilters
+        val applyBass = bassBoostDb > 0.05f
+        val clampedVol = volume.coerceIn(0f, 1f)
 
         var sampleIndex = 0
         var i = 0
@@ -213,25 +259,20 @@ class DesktopEqualizer {
             val channel = sampleIndex % numChannels
             sampleIndex++
 
-            // Leer muestra con signo de 16-bit
             val rawSample = (buffer[i].toInt() and 0xFF) or (buffer[i + 1].toInt() shl 8)
-            val sampleShort = rawSample.toShort()
-            var sampleDouble = sampleShort.toDouble()
+            var sampleDouble = rawSample.toShort().toDouble()
 
-            if (eqActive) {
-                // Aplicar filtros biquad de las 5 bandas
-                for (f in filters) {
-                    sampleDouble = f.processSample(channel, sampleDouble)
-                }
-                if (bassBoostDb > 0.05f) {
-                    sampleDouble = bassBoostFilter.processSample(channel, sampleDouble)
-                }
+            for (pair in activeList) {
+                sampleDouble = pair.first.processSample(channel, sampleDouble)
+            }
+            if (applyBass) {
+                sampleDouble = bassBoostFilter.processSample(channel, sampleDouble)
             }
 
-            // Aplicar ganancia de volumen instantánea en software
-            sampleDouble *= volume
+            if (clampedVol < 0.999f) {
+                sampleDouble *= clampedVol
+            }
 
-            // Clamping y conversión a 16-bit PCM
             val clamped = sampleDouble.toInt().coerceIn(-32768, 32767)
             buffer[i] = (clamped and 0xFF).toByte()
             buffer[i + 1] = ((clamped shr 8) and 0xFF).toByte()

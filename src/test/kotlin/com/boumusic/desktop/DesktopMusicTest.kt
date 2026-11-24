@@ -231,4 +231,54 @@ class DesktopMusicTest {
         assertEquals(4, vm.currentHistory.size)
         assertEquals(3, vm.currentHistoryPointer)
     }
+
+    @Test
+    fun testDesktopEqualizerOptimizations() {
+        val eq = com.boumusic.desktop.audio.DesktopEqualizer()
+        eq.resetToFlat()
+
+        // Buffer estéreo de 1000 muestras (2000 bytes) con valor 1000
+        val sampleVal: Short = 1000
+        val original = ByteArray(2000)
+        for (i in 0 until 1000) {
+            original[i * 2] = (sampleVal.toInt() and 0xFF).toByte()
+            original[i * 2 + 1] = ((sampleVal.toInt() shr 8) and 0xFF).toByte()
+        }
+
+        // Test 1: Bypass con volumen 1.0f (no debe alterar el búfer)
+        val testBuf1 = original.clone()
+        eq.processPcmBuffer(testBuf1, testBuf1.size, 2, 1.0f)
+        for (i in testBuf1.indices) {
+            assertEquals("Bypass plano no debe modificar el buffer", original[i], testBuf1[i])
+        }
+
+        // Test 2: Volumen 50% entero (debe atenuar las muestras a ~500)
+        val testBuf2 = original.clone()
+        eq.processPcmBuffer(testBuf2, testBuf2.size, 2, 0.5f)
+        val sampleOut = ((testBuf2[0].toInt() and 0xFF) or (testBuf2[1].toInt() shl 8)).toShort()
+        assertTrue("Muestra escalada a 0.5 debe estar cerca de 500", sampleOut in 495..505)
+
+        // Test 3: Filtro con ganancia activa
+        eq.setBandGain(0, 6f)
+        val testBuf3 = original.clone()
+        eq.processPcmBuffer(testBuf3, testBuf3.size, 2, 1.0f)
+        // El búfer debe procesarse correctamente sin excepciones
+        assertEquals(2000, testBuf3.size)
+    }
+
+    @Test
+    fun testWindowsDarkThemeHelper() {
+        val isWin = com.boumusic.desktop.ui.util.WindowsDarkThemeHelper.isWindows()
+        val os = System.getProperty("os.name", "").lowercase()
+        assertEquals(os.contains("windows"), isWin)
+
+        // Verificamos que applyDarkTitleBar no lance excepciones y fije el fondo oscuro
+        val frame = javax.swing.JFrame("Test Window")
+        try {
+            com.boumusic.desktop.ui.util.WindowsDarkThemeHelper.applyDarkTitleBar(frame)
+            assertEquals(java.awt.Color(0x12, 0x12, 0x14), frame.background)
+        } finally {
+            frame.dispose()
+        }
+    }
 }

@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -148,11 +149,11 @@ class DesktopMusicViewModel(
         val filtered = if (filters.query.isBlank()) {
             list
         } else {
-            val q = filters.query.lowercase().trim()
+            val q = filters.query.trim()
             list.filter {
-                it.title.lowercase().contains(q) ||
-                it.artist.lowercase().contains(q) ||
-                it.album.lowercase().contains(q)
+                it.title.contains(q, ignoreCase = true) ||
+                it.artist.contains(q, ignoreCase = true) ||
+                it.album.contains(q, ignoreCase = true)
             }
         }
         when (filters.sort) {
@@ -162,25 +163,25 @@ class DesktopMusicViewModel(
             SongSortOrder.DURATION_DESC -> filtered.sortedByDescending { it.duration }
             SongSortOrder.RECENT -> filtered.sortedByDescending { it.id }
         }
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val artists: StateFlow<List<Pair<String, Int>>> = _songs.map { list ->
         list.groupBy { it.artist.ifBlank { "Desconocido" } }
             .map { (artist, sList) -> artist to sList.size }
             .sortedBy { it.first.lowercase() }
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val albums: StateFlow<List<Pair<String, Int>>> = _songs.map { list ->
         list.groupBy { it.album.ifBlank { "Varios" } }
             .map { (album, sList) -> album to sList.size }
             .sortedBy { it.first.lowercase() }
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val genres: StateFlow<List<Pair<String, Int>>> = _songs.map { list ->
         list.groupBy { it.genre.ifBlank { "General" } }
             .map { (genre, sList) -> genre to sList.size }
             .sortedBy { it.first.lowercase() }
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // COLA Y REPRODUCCIÓN
     private val _playbackQueue = MutableStateFlow<List<Song>>(emptyList())

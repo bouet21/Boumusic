@@ -106,7 +106,11 @@ fun QueueScreen(viewModel: DesktopMusicViewModel, modifier: Modifier = Modifier)
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                itemsIndexed(queue) { index, song ->
+                itemsIndexed(
+                    items = queue,
+                    key = { index, song -> "${song.id}_$index" },
+                    contentType = { _, _ -> "queue_row" }
+                ) { index, song ->
                     val isCurrent = currentSong?.id == song.id
                     QueueItemRow(
                         index = index + 1,

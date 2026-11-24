@@ -313,7 +313,11 @@ private fun SongListView(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            itemsIndexed(songs) { index, song ->
+            itemsIndexed(
+                items = songs,
+                key = { _, song -> song.id },
+                contentType = { _, _ -> "song_row" }
+            ) { index, song ->
                 val isCurrent = currentSong?.id == song.id
                 SongRowItem(
                     index = index + 1,
@@ -333,7 +337,7 @@ private fun ArtistListView(
     onSelect: (String) -> Unit
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(artists) { (artist, count) ->
+        items(artists, key = { it.first }) { (artist, count) ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -361,7 +365,7 @@ private fun AlbumListView(
     onSelect: (String) -> Unit
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(albums) { (album, count) ->
+        items(albums, key = { it.first }) { (album, count) ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -389,7 +393,7 @@ private fun GenreListView(
     onSelect: (String) -> Unit
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(genres) { (genre, count) ->
+        items(genres, key = { it.first }) { (genre, count) ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

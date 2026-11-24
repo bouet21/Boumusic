@@ -5,6 +5,9 @@ import com.boumusic.desktop.model.FtpConfig
 import com.boumusic.desktop.model.Playlist
 import com.boumusic.desktop.model.Song
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -95,12 +98,12 @@ class MusicRepository {
     }
 
     suspend fun scanLocalSongs(folder: File = defaultMusicDir): List<Song> = withContext(Dispatchers.IO) {
-        val songs = mutableListOf<Song>()
         val foldersToScan = if (folder == defaultMusicDir && candidateFolders.isNotEmpty()) candidateFolders else listOf(folder)
 
         val audioExtensions = setOf("mp3", "flac", "wav", "ogg", "m4a", "aac", "opus")
         val excludedDirNames = setOf("appdata", "node_modules", "temp", ".gradle", ".git", "windows", "program files")
 
+        val audioFiles = mutableListOf<File>()
         for (dir in foldersToScan) {
             if (!dir.exists() || !dir.isDirectory) continue
             dir.walkTopDown()
@@ -109,16 +112,22 @@ class MusicRepository {
                 }
                 .maxDepth(4)
                 .filter { it.isFile && it.extension.lowercase() in audioExtensions }
-                .forEach { file ->
-                    val fileMeta = AudioMetadataHelper.extractFileMetadata(file)
-                    val (parsedArtist, parsedTitle) = AudioMetadataHelper.parseFileNameMetadata(file.name, file.parentFile?.absolutePath)
+                .forEach { audioFiles.add(it) }
+        }
 
-                    val finalTitle = fileMeta.title?.takeIf { it.isNotBlank() } ?: parsedTitle
-                    val finalArtist = fileMeta.artist?.takeIf { it.isNotBlank() } ?: parsedArtist
-                    val finalAlbum = fileMeta.album?.takeIf { it.isNotBlank() } ?: (file.parentFile?.name ?: "Álbum")
-                    val durationMs = if (fileMeta.durationSec > 0L) fileMeta.durationSec * 1000L else AudioMetadataHelper.detectFileDurationMs(file)
+        // Extracción de metadatos en paralelo aprovechando todos los núcleos de CPU disponibles
+        val songs = coroutineScope {
+            audioFiles.chunked(32).flatMap { chunk ->
+                chunk.map { file ->
+                    async(Dispatchers.IO) {
+                        val fileMeta = AudioMetadataHelper.extractFileMetadata(file)
+                        val (parsedArtist, parsedTitle) = AudioMetadataHelper.parseFileNameMetadata(file.name, file.parentFile?.absolutePath)
 
-                    songs.add(
+                        val finalTitle = fileMeta.title?.takeIf { it.isNotBlank() } ?: parsedTitle
+                        val finalArtist = fileMeta.artist?.takeIf { it.isNotBlank() } ?: parsedArtist
+                        val finalAlbum = fileMeta.album?.takeIf { it.isNotBlank() } ?: (file.parentFile?.name ?: "Álbum")
+                        val durationMs = if (fileMeta.durationSec > 0L) fileMeta.durationSec * 1000L else AudioMetadataHelper.detectFileDurationMs(file)
+
                         Song(
                             id = file.absolutePath.hashCode().toLong(),
                             title = finalTitle,
@@ -129,8 +138,9 @@ class MusicRepository {
                             isRemote = false,
                             fileSize = file.length()
                         )
-                    )
-                }
+                    }
+                }.awaitAll()
+            }
         }
 
         val result = songs.distinctBy { it.path }.sortedBy { it.title.lowercase() }

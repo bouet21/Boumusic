@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -27,8 +30,10 @@ import com.boumusic.desktop.ui.screens.QueueScreen
 import com.boumusic.desktop.ui.screens.ServersScreen
 import com.boumusic.desktop.ui.screens.WrappedScreen
 import com.boumusic.desktop.ui.theme.BoumusicDesktopTheme
+import com.boumusic.desktop.ui.util.WindowsDarkThemeHelper
 import com.boumusic.desktop.viewmodel.DesktopMusicViewModel
 import com.boumusic.desktop.viewmodel.DesktopSection
+import java.io.File
 
 fun main() = application {
     val windowState = rememberWindowState(width = 1140.dp, height = 760.dp)
@@ -39,11 +44,49 @@ fun main() = application {
     val songDetails by viewModel.showSongDetailsDialog.collectAsState()
     val songToAddToPlaylist by viewModel.showAddToPlaylistDialog.collectAsState()
 
+    val currentSong by viewModel.player.currentSong.collectAsState()
+    val isPlaying by viewModel.player.isPlaying.collectAsState()
+
+    val windowTitle = remember(currentSong, isPlaying) {
+        val song = currentSong
+        if (song != null) {
+            val track = if (song.artist.isNotBlank() && !song.artist.equals("Desconocido", ignoreCase = true)) {
+                "${song.title} - ${song.artist}"
+            } else {
+                song.title
+            }
+            if (isPlaying) "Boumusic — ▶ $track" else "Boumusic — $track"
+        } else {
+            "Boumusic"
+        }
+    }
+
+    val appIcon = remember {
+        try {
+            val stream = Thread.currentThread().contextClassLoader.getResourceAsStream("icons/icon.png")
+                ?: File("src/main/resources/icons/icon.png").takeIf { it.exists() }?.inputStream()
+            stream?.use {
+                loadImageBitmap(it)
+            }?.let {
+                BitmapPainter(it)
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     Window(
         onCloseRequest = ::exitApplication,
-        title = "Boumusic Desktop — v1.0.8 (Windows / Linux)",
-        state = windowState
+        title = windowTitle,
+        state = windowState,
+        icon = appIcon
     ) {
+        // Aplica barra de título nativa oscura (DWM) y color de fondo nativo de inmediato
+        WindowsDarkThemeHelper.applyDarkTitleBar(window)
+        LaunchedEffect(window) {
+            WindowsDarkThemeHelper.applyDarkTitleBar(window)
+        }
+
         BoumusicDesktopTheme {
             Scaffold(
                 bottomBar = {

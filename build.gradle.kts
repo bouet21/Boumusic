@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.boumusic.desktop"
-version = "1.0.8"
+version = "1.0.9"
 
 repositories {
     mavenCentral()
@@ -41,6 +41,10 @@ dependencies {
     // JSON para sincronización y backup con Boumusic Android
     implementation("org.json:json:20240303")
 
+    // JNA para integración nativa de Windows (Barra de título oscura DWM)
+    implementation("net.java.dev.jna:jna:5.14.0")
+    implementation("net.java.dev.jna:jna-platform:5.14.0")
+
     // Coroutines Swing
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
@@ -52,13 +56,12 @@ compose.desktop {
     application {
         mainClass = "com.boumusic.desktop.MainKt"
         jvmArgs(
-            "-XX:+TieredCompilation",
-            "-XX:TieredStopAtLevel=1",
-            "-Xms32m",
-            "-Xmx128m",
-            "-XX:+UseSerialGC",
-            "-XX:MinHeapFreeRatio=10",
-            "-XX:MaxHeapFreeRatio=25"
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=20",
+            "-XX:+UseStringDeduplication",
+            "-Xms64m",
+            "-Xmx512m",
+            "-Dfile.encoding=UTF-8"
         )
         nativeDistributions {
             targetFormats(
@@ -67,7 +70,7 @@ compose.desktop {
                 TargetFormat.Deb
             )
             packageName = "Boumusic"
-            packageVersion = "1.0.8"
+            packageVersion = "1.0.9"
             description = "Boumusic Desktop - Reproductor de Música Moderno y Ligero para Windows y Linux"
             vendor = "Boumusic"
             copyright = "© 2026 Boumusic"
@@ -87,10 +90,12 @@ compose.desktop {
                 menuGroup = "Boumusic"
                 upgradeUuid = "a5948f21-72a3-487e-8c31-9a738bf80a2b"
                 shortcut = true
+                iconFile.set(project.file("src/main/resources/icons/icon.ico"))
             }
             linux {
                 packageName = "boumusic"
                 shortcut = true
+                iconFile.set(project.file("src/main/resources/icons/icon.png"))
             }
         }
     }
