@@ -101,6 +101,22 @@ object AudioMetadataHelper {
     }
 
     /**
+     * Extrae metadatos completos (Título, Artista, Álbum y Duración) desde un archivo local.
+     */
+    fun extractFileMetadata(file: File): AudioTrackMetadata {
+        if (!file.exists() || !file.isFile || file.length() < 128) return AudioTrackMetadata()
+        return try {
+            FileInputStream(file).use { fis ->
+                BufferedInputStream(fis, 128 * 1024).use { bis ->
+                    extractMetadata(bis, file.length())
+                }
+            }
+        } catch (_: Throwable) {
+            AudioTrackMetadata()
+        }
+    }
+
+    /**
      * Extrae la duración precisa en milisegundos de un archivo local.
      */
     fun detectFileDurationMs(file: File): Long {
@@ -135,12 +151,8 @@ object AudioMetadataHelper {
     /**
      * Analiza de forma inteligente el nombre del archivo para extraer el Artista y el Título
      * sin mostrar nombres feos ni configurar el nombre del servidor como artista.
-     * Soporta patrones como:
-     * - "Artista - Canción.mp3"
-     * - "01. Artista - Canción.mp3"
-     * - "01 - Artista - Canción.mp3"
-     * - "01 Canción.mp3"
-     * - "Canción [Official Video].mp3"
+     * Soporta tanto el formato tradicional "Artista - Título" como el formato "Título - Artista"
+     * (habitual en herramientas como Sunnify, SpotDL, YouTube, etc.).
      */
     fun parseFileNameMetadata(fileName: String, parentFolderName: String? = null): Pair<String, String> {
         var clean = fileName.substringBeforeLast(".")
@@ -151,7 +163,6 @@ object AudioMetadataHelper {
         clean = clean.replace(Regex("""^\s*\d{1,3}\s+"""), "").trim()
 
         // Eliminar sufijos típicos de ripeo o vídeo de YouTube:
-        // [Official Video], (Audio Oficial), [320kbps], (Lyric Video), etc.
         clean = clean.replace(
             Regex("""\s*[\(\[]\s*(official\s*(music\s*)?video|video\s*oficial|audio\s*oficial|official\s*audio|lyric\s*video|video\s*lyric|audio|hq|hd|320\s*kbps|128\s*kbps|remastered|remaster|clip\s*officiel)\s*[\)\]]""", RegexOption.IGNORE_CASE),
             ""
@@ -162,27 +173,56 @@ object AudioMetadataHelper {
 
         val dashParts = clean.split(Regex("""\s+[-—]\s+"""))
         if (dashParts.size >= 3) {
-            artistCandidate = dashParts[1].trim()
-            titleCandidate = dashParts.drop(2).joinToString(" - ").trim()
+            val last = dashParts.last().trim()
+            val first = dashParts.first().trim()
+            val middle = dashParts.subList(1, dashParts.size - 1).joinToString(" - ").trim()
+
+            if (looksLikeArtist(last) && !looksLikeArtist(first)) {
+                titleCandidate = "$first - $middle"
+                artistCandidate = last
+            } else {
+                artistCandidate = first
+                titleCandidate = "$middle - $last"
+            }
         } else if (dashParts.size == 2) {
             val p0 = dashParts[0].trim()
             val p1 = dashParts[1].trim()
+
             if (p0.matches(Regex("""^\d+$"""))) {
                 titleCandidate = p1
+            } else if (isTitleDashArtistFormat(p0, p1, parentFolderName)) {
+                // Formato Title - Artist (Sunnify, SpotDL, etc.)
+                titleCandidate = p0
+                artistCandidate = p1
             } else {
+                // Formato tradicional Artist - Title
                 artistCandidate = p0
                 titleCandidate = p1
             }
         } else {
             val underscoreParts = clean.split(Regex("""\s+_\s+"""))
             if (underscoreParts.size == 2) {
-                artistCandidate = underscoreParts[0].trim()
-                titleCandidate = underscoreParts[1].trim()
+                val p0 = underscoreParts[0].trim()
+                val p1 = underscoreParts[1].trim()
+                if (isTitleDashArtistFormat(p0, p1, parentFolderName)) {
+                    titleCandidate = p0
+                    artistCandidate = p1
+                } else {
+                    artistCandidate = p0
+                    titleCandidate = p1
+                }
             } else {
                 val hyphenParts = clean.split(Regex("""(?<=[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ])-(?=[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ])"""))
                 if (hyphenParts.size == 2 && !hyphenParts[0].all { it.isDigit() }) {
-                    artistCandidate = hyphenParts[0].trim()
-                    titleCandidate = hyphenParts[1].trim()
+                    val p0 = hyphenParts[0].trim()
+                    val p1 = hyphenParts[1].trim()
+                    if (isTitleDashArtistFormat(p0, p1, parentFolderName)) {
+                        titleCandidate = p0
+                        artistCandidate = p1
+                    } else {
+                        artistCandidate = p0
+                        titleCandidate = p1
+                    }
                 }
             }
         }
@@ -226,6 +266,56 @@ object AudioMetadataHelper {
         }
 
         return finalArtist to finalTitle
+    }
+
+    private fun isTitleDashArtistFormat(p0: String, p1: String, parentPath: String?): Boolean {
+        val pathLower = parentPath?.lowercase() ?: ""
+
+        // 1. Herramientas que descargan siempre en formato "Título - Artista"
+        if (pathLower.contains("sunnify") || pathLower.contains("spotdl") ||
+            pathLower.contains("zotify") || pathLower.contains("deemix") ||
+            pathLower.contains("spotifydown") || pathLower.contains("playlist")
+        ) {
+            return true
+        }
+
+        // 2. Colaboraciones o patrones evidentes de artista en p1
+        if (looksLikeArtist(p1) && !looksLikeArtist(p0)) {
+            return true
+        }
+
+        // 3. Puntuación típica de títulos en p0
+        if ((p0.endsWith("!") || p0.endsWith("?")) && !(p1.endsWith("!") || p1.endsWith("?"))) {
+            return true
+        }
+
+        val p0Lower = p0.lowercase()
+        if (p0Lower.contains("(remix)") || p0Lower.contains("(edit)") || p0Lower.contains("(mix)") ||
+            p0Lower.contains("(live)") || p0Lower.contains("(acoustic)") || p0Lower.contains("(feat.")
+        ) {
+            return true
+        }
+
+        // 4. Coincidencia con carpetas de artista
+        if (parentPath != null) {
+            val folderName = parentPath.replace('\\', '/').substringAfterLast('/').trim()
+            if (folderName.equals(p1, ignoreCase = true)) {
+                return true
+            }
+            if (folderName.equals(p0, ignoreCase = true)) {
+                return false
+            }
+        }
+
+        return false
+    }
+
+    private fun looksLikeArtist(s: String): Boolean {
+        val trimmed = s.trim()
+        if (trimmed.contains(Regex("""\w+,\s+\w+"""))) return true
+        if (trimmed.contains(Regex("""\s+(feat\.|ft\.|featuring)\s+""", RegexOption.IGNORE_CASE))) return true
+        if (trimmed.contains(Regex("""\w+\s+x\s+\w+""", RegexOption.IGNORE_CASE))) return true
+        return false
     }
 
     private fun parseId3v2Tags(buffer: ByteArray, len: Int): AudioTrackMetadata {

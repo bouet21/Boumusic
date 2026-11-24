@@ -144,6 +144,28 @@ class DesktopMusicTest {
         val (a7, t7) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata("Nirvana-In Bloom.mp3")
         assertEquals("Nirvana", a7)
         assertEquals("In Bloom", t7)
+
+        // Sunnify & Title-Artist format tests (e.g. Crimewave - Crystal Castles)
+        val (a8, t8) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata(
+            "Crimewave - Crystal Castles.mp3",
+            parentFolderName = "C:\\Users\\Bouet\\Downloads\\playlist\\Sunnify\\Knights Corpse - bou"
+        )
+        assertEquals("Crystal Castles", a8)
+        assertEquals("Crimewave", t8)
+
+        // Collaboration with comma in artist
+        val (a9, t9) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata(
+            "SMOKE IT OFF! - Lumi Athena, jnhygs.mp3"
+        )
+        assertEquals("Lumi Athena, jnhygs", a9)
+        assertEquals("SMOKE IT OFF!", t9)
+
+        // 3-part title and version
+        val (a10, t10) = com.boumusic.desktop.audio.AudioMetadataHelper.parseFileNameMetadata(
+            "Test & Recognise - Flume Re-work - Seekae, Flume.mp3"
+        )
+        assertEquals("Seekae, Flume", a10)
+        assertEquals("Test & Recognise - Flume Re-work", t10)
     }
 
     @Test

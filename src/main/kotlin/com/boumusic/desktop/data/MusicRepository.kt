@@ -33,18 +33,30 @@ class MusicRepository {
     fun loadCachedSongs(): List<Song> {
         if (!cacheFile.exists()) return emptyList()
         val songs = mutableListOf<Song>()
+        var cacheUpdated = false
         try {
             val arr = JSONArray(cacheFile.readText(Charsets.UTF_8))
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val path = o.optString("path", "")
                 if (path.isNotBlank() && File(path).exists()) {
+                    val file = File(path)
+                    val rawTitle = o.optString("title", file.nameWithoutExtension)
+                    val rawArtist = o.optString("artist", "Artista")
+
+                    // Re-verificar metadatos para corregir canciones que quedaron con artista y título invertidos
+                    val (reparsedArtist, reparsedTitle) = AudioMetadataHelper.parseFileNameMetadata(file.name, file.parentFile?.absolutePath)
+                    val isFlipped = (rawTitle == reparsedArtist && rawArtist == reparsedTitle)
+                    val fixedTitle = if (isFlipped) reparsedTitle else rawTitle
+                    val fixedArtist = if (isFlipped) reparsedArtist else rawArtist
+                    if (isFlipped) cacheUpdated = true
+
                     songs.add(
                         Song(
                             id = o.optLong("id", path.hashCode().toLong()),
-                            title = o.optString("title", File(path).nameWithoutExtension),
-                            artist = o.optString("artist", "Artista"),
-                            album = o.optString("album", "Álbum"),
+                            title = fixedTitle,
+                            artist = fixedArtist,
+                            album = o.optString("album", file.parentFile?.name ?: "Álbum"),
                             duration = o.optLong("duration", 0L),
                             path = path,
                             isRemote = false,
@@ -52,6 +64,9 @@ class MusicRepository {
                         )
                     )
                 }
+            }
+            if (cacheUpdated && songs.isNotEmpty()) {
+                saveCachedSongs(songs)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -95,15 +110,20 @@ class MusicRepository {
                 .maxDepth(4)
                 .filter { it.isFile && it.extension.lowercase() in audioExtensions }
                 .forEach { file ->
-                    val (artist, title) = AudioMetadataHelper.parseFileNameMetadata(file.name, file.parentFile?.name)
+                    val fileMeta = AudioMetadataHelper.extractFileMetadata(file)
+                    val (parsedArtist, parsedTitle) = AudioMetadataHelper.parseFileNameMetadata(file.name, file.parentFile?.absolutePath)
 
-                    val durationMs = AudioMetadataHelper.detectFileDurationMs(file)
+                    val finalTitle = fileMeta.title?.takeIf { it.isNotBlank() } ?: parsedTitle
+                    val finalArtist = fileMeta.artist?.takeIf { it.isNotBlank() } ?: parsedArtist
+                    val finalAlbum = fileMeta.album?.takeIf { it.isNotBlank() } ?: (file.parentFile?.name ?: "Álbum")
+                    val durationMs = if (fileMeta.durationSec > 0L) fileMeta.durationSec * 1000L else AudioMetadataHelper.detectFileDurationMs(file)
+
                     songs.add(
                         Song(
                             id = file.absolutePath.hashCode().toLong(),
-                            title = title,
-                            artist = artist,
-                            album = file.parentFile?.name ?: "Álbum",
+                            title = finalTitle,
+                            artist = finalArtist,
+                            album = finalAlbum,
                             duration = durationMs,
                             path = file.absolutePath,
                             isRemote = false,

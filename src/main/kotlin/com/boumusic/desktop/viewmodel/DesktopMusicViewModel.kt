@@ -577,7 +577,7 @@ class DesktopMusicViewModel(
                 isRemote = true,
                 remoteHost = config.host,
                 remotePath = it.path,
-                fileSize = if (it.size > 0L) item.size else 0L
+                fileSize = if (it.size > 0L) it.size else 0L
             )
         }
         if (audios.isEmpty()) return
