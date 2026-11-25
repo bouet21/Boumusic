@@ -72,7 +72,7 @@ fun CustomizationScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground.copy(alpha = if (AppThemeState.wallpaperPath != null) 0.65f else 1f))
+            .background(DarkBackground)
             .padding(24.dp)
             .verticalScroll(rememberScrollState())
     ) {

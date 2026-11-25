@@ -3,13 +3,25 @@ package com.boumusic.desktop.ui.theme
 import androidx.compose.ui.graphics.Color
 
 val DarkBackground: Color
-    get() = AppThemeState.backgroundColor
+    get() = if (AppThemeState.wallpaperPath != null) {
+        AppThemeState.backgroundColor.copy(alpha = 0.45f)
+    } else {
+        AppThemeState.backgroundColor
+    }
 
 val DarkSurface: Color
-    get() = AppThemeState.surfaceColor
+    get() = if (AppThemeState.wallpaperPath != null) {
+        AppThemeState.surfaceColor.copy(alpha = 0.82f)
+    } else {
+        AppThemeState.surfaceColor
+    }
 
 val DarkSurfaceVariant: Color
-    get() = AppThemeState.surfaceVariantColor
+    get() = if (AppThemeState.wallpaperPath != null) {
+        AppThemeState.surfaceVariantColor.copy(alpha = 0.88f)
+    } else {
+        AppThemeState.surfaceVariantColor
+    }
 
 val DarkCardBorder: Color
     get() = AppThemeState.cardBorderColor
