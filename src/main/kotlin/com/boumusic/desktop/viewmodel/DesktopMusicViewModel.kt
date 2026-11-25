@@ -5,6 +5,13 @@ import com.boumusic.desktop.audio.AudioPlayer
 import com.boumusic.desktop.data.BackupManager
 import com.boumusic.desktop.data.HistoryAndStatsManager
 import com.boumusic.desktop.data.MusicRepository
+import com.boumusic.desktop.downloader.DestinationType
+import com.boumusic.desktop.downloader.DownloadDestination
+import com.boumusic.desktop.downloader.DownloadStage
+import com.boumusic.desktop.downloader.DownloadTask
+import com.boumusic.desktop.downloader.DownloadTrackItem
+import com.boumusic.desktop.downloader.SpotifyEmbedResolver
+import com.boumusic.desktop.downloader.TrackDownloaderEngine
 import com.boumusic.desktop.ftp.FtpManager
 import com.boumusic.desktop.model.FtpConfig
 import com.boumusic.desktop.model.FtpItem
@@ -36,6 +43,7 @@ enum class DesktopSection(val title: String) {
     LIBRARY("Biblioteca"),
     PLAYLISTS("Listas"),
     QUEUE("Cola de reproducción"),
+    DOWNLOADER("Descargas (SpotDL)"),
     SERVERS("Servidores (SMB / FTP)"),
     BACKUP("Sincronización & Backup"),
     EQUALIZER("Ecualizador"),
@@ -746,6 +754,128 @@ class DesktopMusicViewModel(
             val list = repository.scanLocalSongs()
             _songs.value = list
         }
+    }
+
+    // DESCARGADOR SPOTDL & SERVIDORES REMOTOS (SMB / FTP)
+    val downloaderEngine = TrackDownloaderEngine(repository, ftpManager, ftpManager.smbManager)
+
+    private val _downloaderQuery = MutableStateFlow("")
+    val downloaderQuery: StateFlow<String> = _downloaderQuery.asStateFlow()
+    fun setDownloaderQuery(q: String) { _downloaderQuery.value = q }
+
+    private val _isResolvingDownloads = MutableStateFlow(false)
+    val isResolvingDownloads: StateFlow<Boolean> = _isResolvingDownloads.asStateFlow()
+
+    private val _resolvedDownloadTracks = MutableStateFlow<List<DownloadTrackItem>>(emptyList())
+    val resolvedDownloadTracks: StateFlow<List<DownloadTrackItem>> = _resolvedDownloadTracks.asStateFlow()
+
+    private val _downloadResolutionError = MutableStateFlow<String?>(null)
+    val downloadResolutionError: StateFlow<String?> = _downloadResolutionError.asStateFlow()
+
+    private val _downloadTasks = MutableStateFlow<List<DownloadTask>>(emptyList())
+    val downloadTasks: StateFlow<List<DownloadTask>> = _downloadTasks.asStateFlow()
+
+    val availableDestinations: StateFlow<List<DownloadDestination>> = _savedServers.map { servers ->
+        val list = mutableListOf<DownloadDestination>()
+        list.add(
+            DownloadDestination(
+                type = DestinationType.LOCAL,
+                label = "📁 Biblioteca Local (${repository.defaultMusicDir.name})",
+                localFolder = repository.defaultMusicDir
+            )
+        )
+        servers.forEach { s ->
+            val tag = if (s.isSmb) "🖥️ [SMB]" else if (s.isWebDav) "☁️ [WebDAV]" else "🌐 [FTP]"
+            val path = if (s.isSmb) s.cleanSmbShare else if (s.isWebDav) s.webDavPath else "/"
+            list.add(
+                DownloadDestination(
+                    type = if (s.isSmb) DestinationType.SMB else if (s.isWebDav) DestinationType.WEBDAV else DestinationType.FTP,
+                    label = "$tag ${s.name} ($path)",
+                    serverConfig = s,
+                    remoteSubPath = path
+                )
+            )
+        }
+        list
+    }.stateIn(
+        scope,
+        SharingStarted.Eagerly,
+        listOf(DownloadDestination(DestinationType.LOCAL, "📁 Biblioteca Local", localFolder = repository.defaultMusicDir))
+    )
+
+    private val _selectedDestination = MutableStateFlow<DownloadDestination>(
+        DownloadDestination(
+            DestinationType.LOCAL,
+            "📁 Biblioteca Local",
+            localFolder = repository.defaultMusicDir
+        )
+    )
+    val selectedDestination: StateFlow<DownloadDestination> = _selectedDestination.asStateFlow()
+    fun selectDestination(dest: DownloadDestination) { _selectedDestination.value = dest }
+
+    fun searchOrResolveDownloads(query: String? = null) {
+        val q = (query ?: _downloaderQuery.value).trim()
+        if (q.isBlank()) return
+        scope.launch {
+            _isResolvingDownloads.value = true
+            _downloadResolutionError.value = null
+            try {
+                val results = SpotifyEmbedResolver.resolve(q, downloaderEngine.binDir)
+                if (results.isEmpty()) {
+                    _downloadResolutionError.value = "No se encontraron pistas para: '$q'"
+                } else {
+                    _resolvedDownloadTracks.value = results
+                }
+            } catch (e: Exception) {
+                _downloadResolutionError.value = "Error al resolver enlaces: ${e.message ?: e.toString()}"
+            } finally {
+                _isResolvingDownloads.value = false
+            }
+        }
+    }
+
+    fun startDownload(track: DownloadTrackItem, customDest: DownloadDestination? = null) {
+        val dest = customDest ?: _selectedDestination.value
+        val task = DownloadTask(
+            id = UUID.randomUUID().toString(),
+            track = track,
+            destination = dest,
+            stage = DownloadStage.QUEUED,
+            statusMessage = "En cola para descargar..."
+        )
+        _downloadTasks.value = listOf(task) + _downloadTasks.value
+
+        scope.launch {
+            downloaderEngine.executeDownload(task) { updated ->
+                val current = _downloadTasks.value.toMutableList()
+                val idx = current.indexOfFirst { it.id == updated.id }
+                if (idx != -1) {
+                    current[idx] = updated
+                    _downloadTasks.value = current
+                }
+            }
+            if (dest.type == DestinationType.LOCAL) {
+                val updatedSongs = repository.loadCachedSongs()
+                _songs.value = updatedSongs
+            }
+        }
+    }
+
+    fun startDownloadAll(tracks: List<DownloadTrackItem>, customDest: DownloadDestination? = null) {
+        val dest = customDest ?: _selectedDestination.value
+        tracks.forEach { track ->
+            startDownload(track, dest)
+        }
+    }
+
+    fun clearCompletedDownloads() {
+        _downloadTasks.value = _downloadTasks.value.filter {
+            it.stage != DownloadStage.COMPLETED && it.stage != DownloadStage.ERROR
+        }
+    }
+
+    fun removeDownloadTask(taskId: String) {
+        _downloadTasks.value = _downloadTasks.value.filter { it.id != taskId }
     }
 
     // SINCRONIZACIÓN AUTOMÁTICA EN RED LOCAL (UDP / HTTP)

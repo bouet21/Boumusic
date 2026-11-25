@@ -281,4 +281,41 @@ class DesktopMusicTest {
             frame.dispose()
         }
     }
+
+    @Test
+    fun testDownloadModelsAndFormatting() {
+        val track = com.boumusic.desktop.downloader.DownloadTrackItem(
+            id = "spotify:track:12345",
+            title = "Midnight City",
+            artist = "M83",
+            album = "Hurry Up, We're Dreaming",
+            durationMs = 243000L
+        )
+        assertEquals("4:03", track.formattedDuration)
+        assertEquals("M83 • Hurry Up, We're Dreaming", track.displaySubtitle)
+
+        val localDest = com.boumusic.desktop.downloader.DownloadDestination(
+            type = com.boumusic.desktop.downloader.DestinationType.LOCAL,
+            label = "Biblioteca Local"
+        )
+        assertEquals(com.boumusic.desktop.downloader.DestinationType.LOCAL, localDest.type)
+
+        val smbDest = com.boumusic.desktop.downloader.DownloadDestination(
+            type = com.boumusic.desktop.downloader.DestinationType.SMB,
+            label = "Servidor SMB",
+            remoteSubPath = "Musica"
+        )
+        assertEquals(com.boumusic.desktop.downloader.DestinationType.SMB, smbDest.type)
+        assertEquals("Musica", smbDest.remoteSubPath)
+    }
+
+    @Test
+    fun testTrackDownloaderBinaries() {
+        val repo = com.boumusic.desktop.data.MusicRepository()
+        val ftp = com.boumusic.desktop.ftp.FtpManager()
+        val engine = com.boumusic.desktop.downloader.TrackDownloaderEngine(repo, ftp, ftp.smbManager)
+        val ytdlp = engine.getYtDlpBinary()
+        assertTrue("El directorio bin debe existir", engine.binDir.exists())
+        assertTrue("yt-dlp debe haber sido localizado o existir en bin", ytdlp.exists() || engine.binDir.exists())
+    }
 }

@@ -467,4 +467,77 @@ class FtpManager(
             try { client?.disconnect() } catch (_: Exception) {}
         }
     }
+
+    suspend fun uploadSong(
+        config: FtpConfig,
+        remoteDir: String,
+        localFile: File,
+        onProgress: ((Float) -> Unit)? = null
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        if (config.isSmb) {
+            return@withContext smbManager.uploadFile(config, remoteDir, localFile, onProgress)
+        }
+        if (config.isWebDav) {
+            return@withContext webDavManager.uploadFile(config, remoteDir, localFile, onProgress)
+        }
+
+        var client: FTPClient? = null
+        try {
+            val (host, port) = sanitizeHostAndPort(config)
+            client = createClient(config)
+            client.connect(host, port)
+            val user = config.username.trim().ifBlank { "anonymous" }
+            if (!client.login(user, config.password)) {
+                return@withContext Result.failure(Exception("Autenticación fallida al subir a servidor FTP"))
+            }
+
+            configurePostLogin(client)
+            client.enterLocalPassiveMode()
+            client.setFileType(FTP.BINARY_FILE_TYPE)
+
+            val cleanDir = remoteDir.trim().removePrefix("/").removeSuffix("/")
+            if (cleanDir.isNotBlank()) {
+                val parts = cleanDir.split("/").filter { it.isNotBlank() }
+                for (p in parts) {
+                    if (!client.changeWorkingDirectory(p)) {
+                        client.makeDirectory(p)
+                        client.changeWorkingDirectory(p)
+                    }
+                }
+            }
+
+            val targetFileName = localFile.name
+            val totalBytes = localFile.length()
+            var uploaded = 0L
+
+            val success = localFile.inputStream().use { input ->
+                client.storeFile(targetFileName, object : InputStream() {
+                    override fun read(): Int {
+                        val b = input.read()
+                        if (b != -1) {
+                            uploaded++
+                            if (totalBytes > 0) onProgress?.invoke(uploaded.toFloat() / totalBytes)
+                        }
+                        return b
+                    }
+                    override fun read(b: ByteArray, off: Int, len: Int): Int {
+                        val r = input.read(b, off, len)
+                        if (r > 0) {
+                            uploaded += r
+                            if (totalBytes > 0) onProgress?.invoke(uploaded.toFloat() / totalBytes)
+                        }
+                        return r
+                    }
+                })
+            }
+
+            if (success) Result.success(true) else Result.failure(Exception("El servidor FTP rechazó la escritura del archivo"))
+        } catch (t: Throwable) {
+            Result.failure(t)
+        } finally {
+            try {
+                if (client?.isConnected == true) client.disconnect()
+            } catch (_: Exception) {}
+        }
+    }
 }

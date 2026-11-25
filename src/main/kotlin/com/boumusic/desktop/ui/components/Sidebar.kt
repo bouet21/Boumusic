@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Folder
@@ -90,7 +91,7 @@ fun Sidebar(
                     color = TextPrimary
                 )
                 Text(
-                    text = "PC Desktop v1.0.9",
+                    text = "PC Desktop v2.0.0",
                     fontSize = 10.sp,
                     color = NeonCyan,
                     fontWeight = FontWeight.SemiBold
@@ -124,6 +125,15 @@ fun Sidebar(
             icon = Icons.Default.MusicNote,
             isSelected = currentSection == DesktopSection.QUEUE,
             onClick = { viewModel.setSection(DesktopSection.QUEUE) }
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        SidebarItem(
+            title = "Descargas (SpotDL)",
+            icon = Icons.Default.CloudDownload,
+            isSelected = currentSection == DesktopSection.DOWNLOADER,
+            onClick = { viewModel.setSection(DesktopSection.DOWNLOADER) }
         )
 
         Spacer(modifier = Modifier.height(6.dp))

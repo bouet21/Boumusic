@@ -191,6 +191,69 @@ class SmbManager {
         }
     }
 
+    suspend fun uploadFile(
+        config: FtpConfig,
+        remoteDir: String,
+        localFile: File,
+        onProgress: ((Float) -> Unit)? = null
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        var connection: Connection? = null
+        var session: Session? = null
+        var share: DiskShare? = null
+        try {
+            connection = smbClient.connect(config.host, config.port)
+            session = connection.authenticate(getAuthContext(config))
+            val shareName = config.cleanSmbShare.ifBlank { "Musica" }
+            share = session.connectShare(shareName) as DiskShare
+
+            val cleanDir = remoteDir.trim().removePrefix("/").removePrefix("\\").replace("/", "\\")
+            if (cleanDir.isNotBlank() && !share.folderExists(cleanDir)) {
+                var current = ""
+                for (part in cleanDir.split("\\").filter { it.isNotBlank() }) {
+                    current = if (current.isEmpty()) part else "$current\\$part"
+                    if (!share.folderExists(current)) {
+                        try { share.mkdir(current) } catch (_: Throwable) {}
+                    }
+                }
+            }
+
+            val targetPath = if (cleanDir.isBlank()) localFile.name else "$cleanDir\\${localFile.name}"
+            val smbFile = share.openFile(
+                targetPath,
+                setOf(AccessMask.GENERIC_WRITE),
+                setOf(FileAttributes.FILE_ATTRIBUTE_NORMAL),
+                setOf(SMB2ShareAccess.FILE_SHARE_WRITE),
+                SMB2CreateDisposition.FILE_OVERWRITE_IF,
+                null
+            )
+
+            val totalBytes = localFile.length()
+            var uploadedBytes = 0L
+            val buffer = ByteArray(64 * 1024)
+
+            localFile.inputStream().use { input ->
+                smbFile.outputStream.use { output ->
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                        uploadedBytes += read
+                        if (totalBytes > 0) {
+                            onProgress?.invoke(uploadedBytes.toFloat() / totalBytes)
+                        }
+                    }
+                    output.flush()
+                }
+            }
+            Result.success(true)
+        } catch (t: Throwable) {
+            Result.failure(t)
+        } finally {
+            try { share?.close() } catch (_: Throwable) {}
+            try { session?.close() } catch (_: Throwable) {}
+            try { connection?.close() } catch (_: Throwable) {}
+        }
+    }
+
     suspend fun listAllAudioRecursive(config: FtpConfig, maxItems: Int = 10000, maxDepth: Int = 6): Result<List<FtpItem>> = withContext(Dispatchers.IO) {
         var connection: Connection? = null
         var session: Session? = null

@@ -23,6 +23,7 @@ import com.boumusic.desktop.ui.components.Sidebar
 import com.boumusic.desktop.ui.components.SleepTimerDialog
 import com.boumusic.desktop.ui.components.SongDetailsDialog
 import com.boumusic.desktop.ui.screens.BackupScreen
+import com.boumusic.desktop.ui.screens.DownloaderScreen
 import com.boumusic.desktop.ui.screens.EqualizerScreen
 import com.boumusic.desktop.ui.screens.LibraryScreen
 import com.boumusic.desktop.ui.screens.PlaylistsScreen
@@ -111,6 +112,7 @@ fun main() = application {
                             DesktopSection.LIBRARY -> LibraryScreen(viewModel = viewModel)
                             DesktopSection.PLAYLISTS -> PlaylistsScreen(viewModel = viewModel)
                             DesktopSection.QUEUE -> QueueScreen(viewModel = viewModel)
+                            DesktopSection.DOWNLOADER -> DownloaderScreen(viewModel = viewModel)
                             DesktopSection.SERVERS -> ServersScreen(viewModel = viewModel)
                             DesktopSection.BACKUP -> BackupScreen(viewModel = viewModel)
                             DesktopSection.EQUALIZER -> EqualizerScreen(viewModel = viewModel)

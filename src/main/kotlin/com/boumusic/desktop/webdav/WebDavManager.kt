@@ -5,8 +5,10 @@ import com.boumusic.desktop.model.FtpItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
@@ -192,5 +194,37 @@ class WebDavManager {
             }
         }
         Result.success(items)
+    }
+
+    suspend fun uploadFile(
+        config: FtpConfig,
+        remoteDir: String,
+        localFile: File,
+        onProgress: ((Float) -> Unit)? = null
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val normalizedDir = if (remoteDir.startsWith("/")) remoteDir else "/$remoteDir"
+            val targetUrl = buildBaseUrl(config) + (if (normalizedDir.endsWith("/")) normalizedDir else "$normalizedDir/") + localFile.name
+
+            val mediaType = "audio/mpeg".toMediaTypeOrNull()
+            val reqBody = localFile.asRequestBody(mediaType)
+
+            val reqBuilder = Request.Builder()
+                .url(targetUrl)
+                .put(reqBody)
+
+            addAuth(reqBuilder, config)
+            val response = client.newCall(reqBuilder.build()).execute()
+            val success = response.isSuccessful || response.code in 200..204
+            response.close()
+            if (success) {
+                onProgress?.invoke(1.0f)
+                Result.success(true)
+            } else {
+                Result.failure(Exception("HTTP ${response.code}: Error al subir a WebDAV"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }
