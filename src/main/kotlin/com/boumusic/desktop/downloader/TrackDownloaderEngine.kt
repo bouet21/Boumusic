@@ -6,6 +6,8 @@ import com.boumusic.desktop.model.Song
 import com.boumusic.desktop.smb.SmbManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
@@ -55,11 +57,15 @@ class TrackDownloaderEngine(
         task: DownloadTask,
         onUpdate: (DownloadTask) -> Unit
     ): Result<File?> = withContext(Dispatchers.IO) {
-        val ytdlp = getYtDlpBinary()
+        var ytdlp = getYtDlpBinary()
         if (!ytdlp.exists()) {
-            val err = "Motor yt-dlp no encontrado en ${ytdlp.absolutePath}"
-            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
-            return@withContext Result.failure(Exception(err))
+            onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Descargando motor yt-dlp..."))
+            ytdlp = autoDownloadYtDlp() ?: getYtDlpBinary()
+            if (!ytdlp.exists()) {
+                val err = "Motor yt-dlp no encontrado en ${ytdlp.absolutePath}"
+                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+                return@withContext Result.failure(Exception(err))
+            }
         }
 
         val ffmpeg = getFfmpegBinary()
@@ -70,8 +76,8 @@ class TrackDownloaderEngine(
 
         onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Buscando mejor fuente de audio..."))
 
-        // Consulta de búsqueda o enlace directo
-        val targetQuery = if (track.spotifyUrl.startsWith("http") && !track.spotifyUrl.contains("spotify.com")) {
+        // Consulta de búsqueda o enlace directo de YouTube
+        val targetQuery = if (track.spotifyUrl.startsWith("http") && (track.spotifyUrl.contains("youtube.com") || track.spotifyUrl.contains("youtu.be"))) {
             track.spotifyUrl
         } else {
             "ytsearch1:${track.artist} - ${track.title} audio"
@@ -216,5 +222,38 @@ class TrackDownloaderEngine(
             onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
             return@withContext Result.failure(t)
         }
+    }
+
+    private fun autoDownloadYtDlp(): File? {
+        try {
+            val downloadUrl = if (isWindows) {
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+            } else {
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+            }
+            val req = Request.Builder().url(downloadUrl).build()
+            val client = OkHttpClient.Builder()
+                .followRedirects(true)
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .build()
+            val resp = client.newCall(req).execute()
+            if (resp.isSuccessful && resp.body != null) {
+                val target = File(binDir, ytdlpName)
+                target.parentFile?.mkdirs()
+                resp.body!!.byteStream().use { input ->
+                    target.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                resp.close()
+                target.setExecutable(true)
+                return target
+            }
+            resp.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
     }
 }

@@ -318,4 +318,14 @@ class DesktopMusicTest {
         assertTrue("El directorio bin debe existir", engine.binDir.exists())
         assertTrue("yt-dlp debe haber sido localizado o existir en bin", ytdlp.exists() || engine.binDir.exists())
     }
+
+    @Test
+    fun testSearchResolverTextQuery() {
+        kotlinx.coroutines.runBlocking {
+            val results = com.boumusic.desktop.downloader.SpotifyEmbedResolver.resolve("Bad Bunny", limit = 5)
+            println("=== TEST RESULTS COUNT: ${results.size} ===")
+            results.forEach { println("Track: ${it.title} - ${it.artist} (${it.durationMs}ms)") }
+            assertTrue("Debe encontrar canciones al buscar texto", results.isNotEmpty())
+        }
+    }
 }
