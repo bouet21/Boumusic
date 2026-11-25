@@ -1,6 +1,6 @@
 # 🖥️ Boumusic Desktop — Reproductor de Música Moderno y Ligero (Windows & Linux)
 
-[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v1.0.9)](https://github.com/bouet21/Boumusic-Desktop/releases)
+[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v2.0.0)](https://github.com/bouet21/Boumusic-Desktop/releases)
 [![Platform](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux-7B2CBF)](#)
 [![Compose Desktop](https://img.shields.io/badge/Compose%20Multiplatform-1.6.11-brightgreen)](https://www.jetbrains.com/lp/compose-multiplatform/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue)](https://kotlinlang.org)
@@ -10,6 +10,32 @@
 **Boumusic Desktop** es la versión para ordenador (Windows y Linux) del reproductor **Boumusic**. Ha sido diseñada bajo una premisa fundamental: **máxima fluidez, ergonomía y rendimiento sin motores web**.
 
 A diferencia de los reproductores modernos basados en Electron o navegadores embebidos (como Spotify o Discord) que consumen entre 500 MB y 1 GB de memoria RAM con múltiples procesos auxiliares de Chromium, Boumusic Desktop está construido sobre **Compose Multiplatform (Skia)** con renderizado directo por aceleración gráfica de hardware (DirectX en Windows / OpenGL y Vulkan en Linux), manteniendo un consumo estable de **~250 MB de memoria RAM**, un **0% de uso de procesador en reposo** y una interfaz fluida a 60/120 FPS.
+
+---
+
+## 📲 Descarga Directa
+
+* 👉 **[Descargar Boumusic Desktop v2.0.0 (Portable ZIP para Windows x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.0/Boumusic-Desktop-v2.0.0-windows-x64.zip)**
+* *(o consulta todas las versiones y paquetes en la sección de [Releases de GitHub](https://github.com/bouet21/Boumusic-Desktop/releases))*
+
+---
+
+## 🚀 Novedades Principales de la v2.0.0: Módulo SpotDL y Guardado Directo en SMB/FTP
+
+### 📥 1. Motor de Descargas SpotDL & Streams de Alta Calidad
+* **Resolución Inteligente de Spotify**:
+  * Pega enlaces de Spotify (canción individual, álbum completo o playlist) o escribe términos de búsqueda directos.
+  * Extracción limpia de metadatos, carátulas en alta resolución (`AsyncCoverImage`) y duraciones exactas sin requerir cuentas Premium ni credenciales de API.
+  * Límite de búsqueda ampliado a **30 canciones iniciales** con botón de paginación interactivo **"Cargar más canciones (+25)"**.
+* **Guardado Directo en Carpetas de Red (SMB) y Servidores Remotos (FTP / WebDAV)**:
+  * Selector integrado para elegir el destino de guardado de cada descarga:
+    * **Servidores SMB**: Sube automáticamente la canción a carpetas compartidas de red de Windows o Linux Samba (`SmbManager.uploadFile`).
+    * **Servidores FTP / FTPS / WebDAV**: Sube la canción directamente a tus servidores remotos con barra de progreso en vivo (`FtpManager.uploadSong`).
+* **Guardado Inmediato en Biblioteca Local**:
+  * Guarda en tu carpeta de música predeterminada y registra la canción de inmediato en la biblioteca activa sin necesidad de reescanear manualmente.
+* **Interfaz Gráfica Neón Fiel a Boumusic**:
+  * Nueva sección dedicada en la barra lateral con el icono `CloudDownload`.
+  * Cola de descargas en tiempo real con barras de progreso, estados contextuales (*Buscando audio*, *Descargando*, *Codificando*, *Subiendo a SMB*, *Completado*) y botón para limpiar terminadas.
 
 ---
 
