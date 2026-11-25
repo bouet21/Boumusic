@@ -2,18 +2,35 @@ package com.boumusic.desktop.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val DarkBackground = Color(0xFF0D0F14)
-val DarkSurface = Color(0xFF161922)
-val DarkSurfaceVariant = Color(0xFF202430)
-val DarkCardBorder = Color(0xFF2A3040)
+val DarkBackground: Color
+    get() = AppThemeState.backgroundColor
 
-val NeonCyan = Color(0xFF00F5D4)
-val ElectricPurple = Color(0xFF7B2CBF)
-val DeepCyan = Color(0xFF00BB9C)
+val DarkSurface: Color
+    get() = AppThemeState.surfaceColor
 
-val TextPrimary = Color(0xFFF0F4F8)
-val TextSecondary = Color(0xFF94A3B8)
-val TextMuted = Color(0xFF64748B)
+val DarkSurfaceVariant: Color
+    get() = AppThemeState.surfaceVariantColor
 
-val AccentSuccess = Color(0xFF10B981)
-val AccentError = Color(0xFFEF4444)
+val DarkCardBorder: Color
+    get() = AppThemeState.cardBorderColor
+
+val NeonCyan: Color
+    get() = AppThemeState.primaryColor
+
+val ElectricPurple: Color
+    get() = AppThemeState.secondaryColor
+
+val DeepCyan: Color
+    get() = AppThemeState.primaryColor
+
+val TextPrimary: Color
+    get() = AppThemeState.textPrimaryColor
+
+val TextSecondary: Color
+    get() = AppThemeState.textSecondaryColor
+
+val TextMuted: Color
+    get() = AppThemeState.textSecondaryColor.copy(alpha = 0.7f)
+
+val AccentSuccess: Color = Color(0xFF10B981)
+val AccentError: Color = Color(0xFFEF4444)

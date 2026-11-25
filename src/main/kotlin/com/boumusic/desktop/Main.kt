@@ -23,6 +23,7 @@ import com.boumusic.desktop.ui.components.Sidebar
 import com.boumusic.desktop.ui.components.SleepTimerDialog
 import com.boumusic.desktop.ui.components.SongDetailsDialog
 import com.boumusic.desktop.ui.screens.BackupScreen
+import com.boumusic.desktop.ui.screens.CustomizationScreen
 import com.boumusic.desktop.ui.screens.DownloaderScreen
 import com.boumusic.desktop.ui.screens.EqualizerScreen
 import com.boumusic.desktop.ui.screens.LibraryScreen
@@ -36,8 +37,10 @@ import com.boumusic.desktop.viewmodel.DesktopMusicViewModel
 import com.boumusic.desktop.viewmodel.DesktopSection
 import java.io.File
 
-fun main() = application {
-    val windowState = rememberWindowState(width = 1140.dp, height = 760.dp)
+fun main() {
+    com.boumusic.desktop.ui.theme.DesktopThemeManager.init()
+    application {
+        val windowState = rememberWindowState(width = 1140.dp, height = 760.dp)
     val viewModel = remember { DesktopMusicViewModel() }
     val currentSection by viewModel.currentSection.collectAsState()
 
@@ -90,6 +93,7 @@ fun main() = application {
 
         BoumusicDesktopTheme {
             Scaffold(
+                containerColor = androidx.compose.ui.graphics.Color.Transparent,
                 bottomBar = {
                     PlayerBar(viewModel = viewModel)
                 }
@@ -117,6 +121,7 @@ fun main() = application {
                             DesktopSection.BACKUP -> BackupScreen(viewModel = viewModel)
                             DesktopSection.EQUALIZER -> EqualizerScreen(viewModel = viewModel)
                             DesktopSection.WRAPPED -> WrappedScreen(viewModel = viewModel)
+                            DesktopSection.CUSTOMIZATION -> CustomizationScreen(viewModel = viewModel)
                         }
                     }
                 }
@@ -146,4 +151,5 @@ fun main() = application {
             }
         }
     }
+}
 }

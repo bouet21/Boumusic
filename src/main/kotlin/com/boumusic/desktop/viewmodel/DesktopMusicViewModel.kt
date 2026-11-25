@@ -47,7 +47,8 @@ enum class DesktopSection(val title: String) {
     SERVERS("Servidores (SMB / FTP)"),
     BACKUP("Sincronización & Backup"),
     EQUALIZER("Ecualizador"),
-    WRAPPED("Boumusic Wrapped")
+    WRAPPED("Boumusic Wrapped"),
+    CUSTOMIZATION("Personalización")
 }
 
 enum class RepeatMode(val label: String) {

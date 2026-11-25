@@ -1,6 +1,6 @@
 # 🖥️ Boumusic Desktop — Reproductor de Música Moderno y Ligero (Windows & Linux)
 
-[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v2.0.0)](https://github.com/bouet21/Boumusic-Desktop/releases)
+[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v2.0.1)](https://github.com/bouet21/Boumusic-Desktop/releases)
 [![Platform](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux-7B2CBF)](#)
 [![Compose Desktop](https://img.shields.io/badge/Compose%20Multiplatform-1.6.11-brightgreen)](https://www.jetbrains.com/lp/compose-multiplatform/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue)](https://kotlinlang.org)
@@ -15,8 +15,28 @@ A diferencia de los reproductores modernos basados en Electron o navegadores emb
 
 ## 📲 Descarga Directa
 
-* 👉 **[Descargar Boumusic Desktop v2.0.0 (Portable ZIP para Windows x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.0/Boumusic-Desktop-v2.0.0-windows-x64.zip)**
+* 👉 **[Descargar Boumusic Desktop v2.0.1 (Instalador Setup Windows x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-2.0.1-Setup.exe)**
+* 👉 **[Descargar Boumusic Desktop v2.0.1 (Instalador MSI Windows x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-2.0.1.msi)**
+* 👉 **[Descargar Boumusic Desktop v2.0.1 (Portable ZIP para Windows x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-Desktop-v2.0.1-windows-x64.zip)**
 * *(o consulta todas las versiones y paquetes en la sección de [Releases de GitHub](https://github.com/bouet21/Boumusic-Desktop/releases))*
+
+---
+
+## 🎨 Novedades Principales de la v2.0.1: Personalización Completa de la Interfaz
+
+* **Sección de Personalización en la Barra Lateral**:
+  * Acceso directo mediante el nuevo botón con icono de paleta en el Sidebar.
+* **Presets de Tema Instantáneos**:
+  * Tarjetas de estilo para alternar al instante entre *Boumusic Cyberpunk*, *Midnight AMOLED*, *Neon Sunset*, *Emerald Matrix*, *Synthwave 80s*, *Solar Amber* y *Rose Gold*.
+* **Paleta de Colores Personalizable**:
+  * Control total de colores primarios y secundarios para botones, sliders de progreso y acentos visuales.
+  * Selector de fondos base (OLED puro, Gris noche, Midnight Blue, Abisal).
+* **Fondo de Pantalla con Selector Nativo de Archivos**:
+  * Diálogo nativo del sistema operativo para seleccionar imágenes `.png`, `.jpg`, `.jpeg`, `.webp`.
+  * Regulador continuo de opacidad / atenuación para adaptar cualquier imagen y mantener la lectura impecable.
+* **Control de Animaciones y Restauración**:
+  * Interruptor para activar/desactivar animaciones fluidas y botón para restablecer el tema a los valores de fábrica.
+  * Persistencia automática en `~/.boumusic/theme_config.json`.
 
 ---
 

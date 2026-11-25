@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -170,6 +171,15 @@ fun Sidebar(
             icon = Icons.Default.AutoAwesome,
             isSelected = currentSection == DesktopSection.WRAPPED,
             onClick = { viewModel.setSection(DesktopSection.WRAPPED) }
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        SidebarItem(
+            title = "Personalización",
+            icon = Icons.Default.Palette,
+            isSelected = currentSection == DesktopSection.CUSTOMIZATION,
+            onClick = { viewModel.setSection(DesktopSection.CUSTOMIZATION) }
         )
 
         Spacer(modifier = Modifier.weight(1f))

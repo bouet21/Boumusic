@@ -6,6 +6,8 @@ out/
 .DS_Store
 Thumbs.db
 *.zip
+*.exe
+*.msi
 dist-linux/
 release/
 Boumusic-Windows-*/
