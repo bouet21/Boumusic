@@ -16,8 +16,8 @@ A diferencia de los reproductores modernos basados en Electron o navegadores emb
 ## 📲 Descarga Directa
 
 * 👉 **[Descargar Boumusic Desktop v2.0.1 (Instalador Setup Windows x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-2.0.1-Setup.exe)**
-* 👉 **[Descargar Boumusic Desktop v2.0.1 (Instalador MSI Windows x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-2.0.1.msi)**
 * 👉 **[Descargar Boumusic Desktop v2.0.1 (Portable ZIP para Windows x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-Desktop-v2.0.1-windows-x64.zip)**
+* 👉 **[Descargar Boumusic Desktop v2.0.1 (Paquete para Linux x64)](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-Linux-x64-v2.0.1.zip)**
 * *(o consulta todas las versiones y paquetes en la sección de [Releases de GitHub](https://github.com/bouet21/Boumusic-Desktop/releases))*
 
 ---
