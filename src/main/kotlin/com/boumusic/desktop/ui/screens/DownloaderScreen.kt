@@ -449,6 +449,41 @@ fun DownloaderScreen(
                         onDownload = { viewModel.startDownload(track) }
                     )
                 }
+
+                item {
+                    val isDirectUrl = query.contains("spotify.com") || query.startsWith("spotify:")
+                    if (!isDirectUrl) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Button(
+                                onClick = { viewModel.loadMoreSearchResults() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = DarkSurfaceVariant,
+                                    contentColor = NeonCyan
+                                ),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                if (isResolving) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        color = NeonCyan,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Buscando más canciones...", fontSize = 12.sp)
+                                } else {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Cargar más canciones (+25)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
             } else if (!isResolving && tasks.isEmpty()) {
                 item {
                     Box(

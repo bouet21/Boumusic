@@ -813,14 +813,17 @@ class DesktopMusicViewModel(
     val selectedDestination: StateFlow<DownloadDestination> = _selectedDestination.asStateFlow()
     fun selectDestination(dest: DownloadDestination) { _selectedDestination.value = dest }
 
-    fun searchOrResolveDownloads(query: String? = null) {
+    private var currentSearchLimit = 30
+
+    fun searchOrResolveDownloads(query: String? = null, limit: Int = 30) {
         val q = (query ?: _downloaderQuery.value).trim()
         if (q.isBlank()) return
+        currentSearchLimit = limit
         scope.launch {
             _isResolvingDownloads.value = true
             _downloadResolutionError.value = null
             try {
-                val results = SpotifyEmbedResolver.resolve(q, downloaderEngine.binDir)
+                val results = SpotifyEmbedResolver.resolve(q, downloaderEngine.binDir, limit = limit)
                 if (results.isEmpty()) {
                     _downloadResolutionError.value = "No se encontraron pistas para: '$q'"
                 } else {
@@ -832,6 +835,13 @@ class DesktopMusicViewModel(
                 _isResolvingDownloads.value = false
             }
         }
+    }
+
+    fun loadMoreSearchResults() {
+        val q = _downloaderQuery.value.trim()
+        if (q.isBlank() || _isResolvingDownloads.value) return
+        currentSearchLimit += 25
+        searchOrResolveDownloads(q, limit = currentSearchLimit)
     }
 
     fun startDownload(track: DownloadTrackItem, customDest: DownloadDestination? = null) {

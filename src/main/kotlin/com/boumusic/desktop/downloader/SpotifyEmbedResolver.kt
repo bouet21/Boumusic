@@ -31,7 +31,7 @@ object SpotifyEmbedResolver {
     /**
      * Resuelve un término de búsqueda o enlace de Spotify y devuelve la lista de canciones encontradas.
      */
-    suspend fun resolve(query: String, binDir: java.io.File? = null): List<DownloadTrackItem> = withContext(Dispatchers.IO) {
+    suspend fun resolve(query: String, binDir: java.io.File? = null, limit: Int = 30): List<DownloadTrackItem> = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return@withContext emptyList()
 
@@ -49,8 +49,8 @@ object SpotifyEmbedResolver {
             return@withContext resolveSpotifyEmbed(type, id, "https://open.spotify.com/$type/$id")
         }
 
-        // Si es búsqueda por texto plano, intentamos buscar mediante yt-dlp o Spotify oEmbed
-        resolveTextSearch(trimmed, binDir)
+        // Si es búsqueda por texto plano, buscamos múltiples pistas mediante yt-dlp (por defecto 30 resultados)
+        resolveTextSearch(trimmed, binDir, limit)
     }
 
     private fun resolveSpotifyEmbed(type: String, id: String, originalUrl: String): List<DownloadTrackItem> {
@@ -143,7 +143,7 @@ object SpotifyEmbedResolver {
         return emptyList()
     }
 
-    private fun resolveTextSearch(query: String, binDir: java.io.File?): List<DownloadTrackItem> {
+    private fun resolveTextSearch(query: String, binDir: java.io.File?, limit: Int = 30): List<DownloadTrackItem> {
         val ytdlp = java.io.File(binDir ?: java.io.File(System.getProperty("user.home"), ".boumusic/bin"), if (System.getProperty("os.name").lowercase().contains("windows")) "yt-dlp.exe" else "yt-dlp")
         if (ytdlp.exists()) {
             try {
@@ -151,12 +151,12 @@ object SpotifyEmbedResolver {
                     ytdlp.absolutePath,
                     "--dump-json",
                     "--flat-playlist",
-                    "ytsearch6:$query"
+                    "ytsearch$limit:$query"
                 )
                 pb.redirectErrorStream(true)
                 val proc = pb.start()
                 val lines = proc.inputStream.bufferedReader().readLines()
-                proc.waitFor(8, TimeUnit.SECONDS)
+                proc.waitFor(20, TimeUnit.SECONDS)
 
                 val results = mutableListOf<DownloadTrackItem>()
                 for (line in lines) {
