@@ -131,7 +131,7 @@ fun Sidebar(
         Spacer(modifier = Modifier.height(6.dp))
 
         SidebarItem(
-            title = "Descargas (SpotDL)",
+            title = "Descargas",
             icon = Icons.Default.CloudDownload,
             isSelected = currentSection == DesktopSection.DOWNLOADER,
             onClick = { viewModel.setSection(DesktopSection.DOWNLOADER) }
@@ -140,7 +140,7 @@ fun Sidebar(
         Spacer(modifier = Modifier.height(6.dp))
 
         SidebarItem(
-            title = "Servidores (SMB / FTP)",
+            title = "Servidores",
             icon = Icons.Default.Dns,
             isSelected = currentSection == DesktopSection.SERVERS,
             onClick = { viewModel.setSection(DesktopSection.SERVERS) }

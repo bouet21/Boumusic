@@ -126,7 +126,7 @@ fun DownloaderScreen(
                 Spacer(modifier = Modifier.width(14.dp))
                 Column {
                     Text(
-                        text = "Descargador SpotDL & Streams",
+                        text = "Descargas",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
@@ -134,7 +134,7 @@ fun DownloaderScreen(
                         color = TextPrimary
                     )
                     Text(
-                        text = "Descarga de Spotify / YouTube directamente a Biblioteca Local o Servidores SMB / FTP",
+                        text = "Descarga de canciones directamente a tu Biblioteca Local o Servidores Remotos",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
