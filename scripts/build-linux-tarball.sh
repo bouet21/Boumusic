@@ -8,7 +8,7 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="$PROJECT_DIR/build/compose/binaries/main/tarball"
-VERSION="2.0.1"
+VERSION="2.1.0"
 
 echo "=== [1/3] Compilando distribución binaria standalone con Gradle ==="
 cd "$PROJECT_DIR"

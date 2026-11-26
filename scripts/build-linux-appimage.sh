@@ -10,7 +10,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$PROJECT_DIR/build/appimage"
 APP_DIR="$BUILD_DIR/Boumusic.AppDir"
 OUTPUT_DIR="$PROJECT_DIR/build/compose/binaries/main/appimage"
-VERSION="2.0.1"
+VERSION="2.1.0"
 
 echo "=== [1/5] Compilando distribución binaria standalone con Gradle ==="
 cd "$PROJECT_DIR"

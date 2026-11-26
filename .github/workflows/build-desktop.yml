@@ -12,37 +12,6 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Run Tests
-        run: ./gradlew test
-
-      - name: Package Windows Distribution
-        run: ./gradlew packageDistributionForCurrentOS
-
-      - name: Compress Windows Distribution
-        run: |
-          Compress-Archive -Path build/compose/binaries/main/app/* -DestinationPath Boumusic-Windows-x64.zip -Force
-
-      - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Boumusic-Windows-x64
-          path: Boumusic-Windows-x64.zip
-
   build-linux:
     runs-on: ubuntu-latest
     steps:
@@ -58,45 +27,77 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Grant execute permission for gradlew and scripts
+        run: |
+          chmod +x gradlew
+          chmod +x scripts/*.sh || true
 
       - name: Run Tests
         run: ./gradlew test
 
-      - name: Package Linux Distribution
-        run: ./gradlew packageDistributionForCurrentOS
+      - name: Package Standalone Linux Distribution
+        run: ./gradlew createDistributable
 
-      - name: Compress Linux Distribution
+      - name: Create Linux Tarball and AppImage
         run: |
-          tar -czf Boumusic-Linux-x64.tar.gz -C build/compose/binaries/main/app .
+          mkdir -p dist
+          VERSION="2.1.0"
+          DIST_DIR="build/compose/binaries/main/app/boumusic"
+          if [ ! -d "$DIST_DIR" ]; then
+              DIST_DIR="build/compose/binaries/main/app/Boumusic"
+          fi
 
-      - name: Upload Linux Artifact
+          echo "Distributable directory: $DIST_DIR"
+          chmod +x "$DIST_DIR/boumusic" || true
+
+          # 1. Tarball
+          tar -czf "dist/Boumusic-$VERSION-linux-x64.tar.gz" -C "$(dirname "$DIST_DIR")" "$(basename "$DIST_DIR")"
+          echo "Tarball created successfully"
+
+          # 2. AppImage
+          APP_DIR="build/appimage/Boumusic.AppDir"
+          mkdir -p "$APP_DIR/usr/bin"
+          mkdir -p "$APP_DIR/usr/lib"
+          mkdir -p "$APP_DIR/usr/share/applications"
+          mkdir -p "$APP_DIR/usr/share/icons/hicolor/256x256/apps"
+
+          cp -r "$DIST_DIR"/* "$APP_DIR/usr/bin/"
+          cp scripts/boumusic.desktop "$APP_DIR/usr/share/applications/boumusic.desktop"
+          cp scripts/boumusic.desktop "$APP_DIR/boumusic.desktop"
+          cp src/main/resources/icons/icon.png "$APP_DIR/usr/share/icons/hicolor/256x256/apps/boumusic.png"
+          cp src/main/resources/icons/icon.png "$APP_DIR/boumusic.png"
+          cp src/main/resources/icons/icon.png "$APP_DIR/.DirIcon"
+
+          cat << 'EOF' > "$APP_DIR/AppRun"
+#!/bin/sh
+SELF=$(readlink -f "$0")
+HERE=${SELF%/*}
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/bin/runtime/lib:${LD_LIBRARY_PATH}"
+cd "$HERE/usr/bin"
+exec ./boumusic "$@"
+EOF
+          chmod +x "$APP_DIR/AppRun"
+
+          curl -L -o appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+          ./appimagetool --appimage-extract
+          ARCH=x86_64 ./squashfs-root/AppRun --no-appstream "$APP_DIR" "dist/Boumusic-$VERSION-x86_64.AppImage"
+          echo "AppImage created successfully"
+
+          ls -la dist/
+          sha256sum dist/*
+
+      - name: Upload Linux Dist Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Boumusic-Linux-x64
-          path: Boumusic-Linux-x64.tar.gz
+          name: Boumusic-Linux-v2.1.0-Binaries
+          path: |
+            dist/Boumusic-2.1.0-linux-x64.tar.gz
+            dist/Boumusic-2.1.0-x86_64.AppImage
 
-  release:
-    needs: [build-windows, build-linux]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Windows Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Boumusic-Windows-x64
-
-      - name: Download Linux Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Boumusic-Linux-x64
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          prerelease: true
-          generate_release_notes: true
-          files: |
-            Boumusic-Windows-x64.zip
-            Boumusic-Linux-x64.tar.gz
+      - name: Upload to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload v2.1.0 dist/Boumusic-2.1.0-linux-x64.tar.gz dist/Boumusic-2.1.0-x86_64.AppImage --clobber
