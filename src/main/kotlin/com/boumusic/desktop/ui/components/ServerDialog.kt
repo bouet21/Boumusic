@@ -75,6 +75,7 @@ fun ServerDialog(
     var webDavPath by remember { mutableStateOf(initialConfig?.webDavPath ?: "/") }
     var isSmb by remember { mutableStateOf(initialConfig?.isSmb ?: false) }
     var smbShare by remember { mutableStateOf(initialConfig?.smbShare ?: "Musica") }
+    var isSubsonic by remember { mutableStateOf(initialConfig?.isSubsonic ?: false) }
 
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
@@ -83,6 +84,7 @@ fun ServerDialog(
 
     fun buildConfig(): FtpConfig {
         val defaultPort = when {
+            isSubsonic -> 4533
             isSmb -> 445
             isWebDav -> 443
             isFtps -> 21
@@ -109,7 +111,7 @@ fun ServerDialog(
 
         return FtpConfig(
             id = initialConfig?.id ?: java.util.UUID.randomUUID().toString(),
-            name = name.ifBlank { "Servidor" },
+            name = name.ifBlank { if (isSubsonic) "Navidrome / Subsonic" else "Servidor" },
             host = cleanHost,
             port = port,
             username = username.trim().ifBlank { if (isSmb) "guest" else "anonymous" },
@@ -118,7 +120,8 @@ fun ServerDialog(
             isWebDav = isWebDav,
             webDavPath = webDavPath,
             isSmb = isSmb,
-            smbShare = smbShare
+            smbShare = smbShare,
+            isSubsonic = isSubsonic
         )
     }
 
@@ -162,11 +165,12 @@ fun ServerDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     FilterChip(
-                        selected = !isSmb && !isWebDav && !isFtps,
+                        selected = !isSmb && !isWebDav && !isFtps && !isSubsonic,
                         onClick = {
                             isSmb = false
                             isWebDav = false
                             isFtps = false
+                            isSubsonic = false
                             portStr = "21"
                         },
                         label = { Text("FTP", fontSize = 11.sp) },
@@ -178,9 +182,10 @@ fun ServerDialog(
                             isSmb = false
                             isWebDav = false
                             isFtps = true
+                            isSubsonic = false
                             portStr = "21"
                         },
-                        label = { Text("FTPS (Seguro)", fontSize = 11.sp) },
+                        label = { Text("FTPS", fontSize = 11.sp) },
                         colors = chipColors()
                     )
                     FilterChip(
@@ -189,6 +194,7 @@ fun ServerDialog(
                             isSmb = true
                             isWebDav = false
                             isFtps = false
+                            isSubsonic = false
                             portStr = "445"
                         },
                         label = { Text("SMB", fontSize = 11.sp) },
@@ -200,9 +206,28 @@ fun ServerDialog(
                             isSmb = false
                             isWebDav = true
                             isFtps = false
+                            isSubsonic = false
                             portStr = "443"
                         },
                         label = { Text("WebDAV", fontSize = 11.sp) },
+                        colors = chipColors()
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = isSubsonic,
+                        onClick = {
+                            isSmb = false
+                            isWebDav = false
+                            isFtps = false
+                            isSubsonic = true
+                            portStr = "4533"
+                        },
+                        label = { Text("Subsonic / Navidrome / Jellyfin", fontSize = 11.sp) },
                         colors = chipColors()
                     )
                 }

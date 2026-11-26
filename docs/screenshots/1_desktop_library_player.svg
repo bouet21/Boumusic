@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 640" width="1024" height="640">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0c"/>
+      <stop offset="100%" stop-color="#121216"/>
+    </linearGradient>
+    <linearGradient id="neonGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00F5D4"/>
+      <stop offset="100%" stop-color="#7B2CBF"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e26"/>
+      <stop offset="100%" stop-color="#15151c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Window -->
+  <rect width="1024" height="640" rx="12" fill="url(#bg)" stroke="#2d2d38" stroke-width="1.5"/>
+
+  <!-- TitleBar -->
+  <rect width="1024" height="38" rx="12" fill="#14141a"/>
+  <rect y="26" width="1024" height="12" fill="#14141a"/>
+  <circle cx="20" cy="19" r="6" fill="#EF4444"/>
+  <circle cx="38" cy="19" r="6" fill="#F59E0B"/>
+  <circle cx="56" cy="19" r="6" fill="#10B981"/>
+  <text x="512" y="24" fill="#a0a0b2" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="12" font-weight="600" text-anchor="middle">Boumusic Desktop — ▶ Midnight City - M83 [ReplayGain -5.2 dB | Gapless 0ms]</text>
+
+  <!-- Sidebar -->
+  <rect x="0" y="38" width="220" height="522" fill="#0f0f14"/>
+  <line x1="220" y1="38" x2="220" y2="560" stroke="#23232e" stroke-width="1"/>
+
+  <!-- App Logo / Name -->
+  <text x="24" y="76" fill="#00F5D4" font-family="sans-serif" font-size="20" font-weight="900" letter-spacing="1">⚡ BOUMUSIC</text>
+  <text x="146" y="76" fill="#7B2CBF" font-family="sans-serif" font-size="11" font-weight="700">v2.0.1</text>
+
+  <!-- Sidebar Nav Items -->
+  <!-- Active Item: Biblioteca -->
+  <rect x="12" y="100" width="196" height="36" rx="8" fill="#1f1f2c"/>
+  <rect x="12" y="100" width="3" height="36" rx="1.5" fill="#00F5D4"/>
+  <text x="32" y="123" fill="#00F5D4" font-family="sans-serif" font-size="13" font-weight="700">🎵  Biblioteca Local</text>
+
+  <text x="32" y="162" fill="#8e8ea0" font-family="sans-serif" font-size="13" font-weight="500">📑  Listas de Reproducción</text>
+  <text x="32" y="200" fill="#8e8ea0" font-family="sans-serif" font-size="13" font-weight="500">⏳  Cola de Reproducción</text>
+  <text x="32" y="238" fill="#8e8ea0" font-family="sans-serif" font-size="13" font-weight="500">⬇️  Descargas (SpotDL)</text>
+  
+  <rect x="12" y="260" width="196" height="36" rx="8" fill="#1a1528"/>
+  <text x="32" y="283" fill="#c084fc" font-family="sans-serif" font-size="13" font-weight="600">🌐  Servidores (Subsonic/SMB)</text>
+  
+  <text x="32" y="322" fill="#8e8ea0" font-family="sans-serif" font-size="13" font-weight="500">🔄  Sincronización &amp; Backup</text>
+  <text x="32" y="360" fill="#8e8ea0" font-family="sans-serif" font-size="13" font-weight="500">🎛️  Ecualizador &amp; Gapless</text>
+  <text x="32" y="398" fill="#8e8ea0" font-family="sans-serif" font-size="13" font-weight="500">🎨  Personalización UI</text>
+
+  <!-- Stats / Badges in sidebar -->
+  <rect x="18" y="490" width="184" height="50" rx="8" fill="#14141e" stroke="#252535" stroke-width="1"/>
+  <text x="30" y="512" fill="#00F5D4" font-family="sans-serif" font-size="11" font-weight="700">● MODO ULTRA-RÁPIDO</text>
+  <text x="30" y="528" fill="#717182" font-family="sans-serif" font-size="10">RAM ~250MB • Skia HW Accel</text>
+
+  <!-- Main Content Area: Library Table -->
+  <!-- Search and Action Bar -->
+  <rect x="244" y="56" width="460" height="36" rx="8" fill="#181822" stroke="#2c2c3e" stroke-width="1"/>
+  <text x="260" y="79" fill="#717188" font-family="sans-serif" font-size="12">🔍 Buscar canciones, artistas o álbumes...</text>
+  
+  <rect x="716" y="56" width="130" height="36" rx="8" fill="#7B2CBF"/>
+  <text x="781" y="79" fill="#ffffff" font-family="sans-serif" font-size="12" font-weight="700" text-anchor="middle">🔀 Aleatorio</text>
+  
+  <rect x="856" y="56" width="144" height="36" rx="8" fill="#1b2e2b" stroke="#00F5D4" stroke-width="1"/>
+  <text x="928" y="79" fill="#00F5D4" font-family="sans-serif" font-size="12" font-weight="700" text-anchor="middle">➕ Añadir Carpeta</text>
+
+  <!-- Songs Table Header -->
+  <rect x="244" y="106" width="756" height="32" rx="6" fill="#14141c"/>
+  <text x="260" y="127" fill="#636378" font-family="sans-serif" font-size="11" font-weight="700">#</text>
+  <text x="296" y="127" fill="#636378" font-family="sans-serif" font-size="11" font-weight="700">TÍTULO</text>
+  <text x="560" y="127" fill="#636378" font-family="sans-serif" font-size="11" font-weight="700">ARTISTA</text>
+  <text x="760" y="127" fill="#636378" font-family="sans-serif" font-size="11" font-weight="700">ÁLBUM</text>
+  <text x="960" y="127" fill="#636378" font-family="sans-serif" font-size="11" font-weight="700" text-anchor="end">DURACIÓN</text>
+
+  <!-- Song Row 1 (Playing) -->
+  <rect x="244" y="144" width="756" height="42" rx="6" fill="#1b242e" stroke="#00F5D4" stroke-width="1"/>
+  <text x="260" y="170" fill="#00F5D4" font-family="sans-serif" font-size="12" font-weight="900">▶</text>
+  <text x="296" y="170" fill="#00F5D4" font-family="sans-serif" font-size="13" font-weight="700">Midnight City</text>
+  <text x="560" y="170" fill="#ffffff" font-family="sans-serif" font-size="12">M83</text>
+  <text x="760" y="170" fill="#8e8ea0" font-family="sans-serif" font-size="12">Hurry Up, We're Dreaming</text>
+  <text x="960" y="170" fill="#00F5D4" font-family="sans-serif" font-size="12" font-weight="700" text-anchor="end">4:03</text>
+
+  <!-- Song Row 2 -->
+  <rect x="244" y="190" width="756" height="40" rx="6" fill="#13131a"/>
+  <text x="260" y="215" fill="#636378" font-family="sans-serif" font-size="12">02</text>
+  <text x="296" y="215" fill="#f0f0f5" font-family="sans-serif" font-size="13" font-weight="600">Starboy (feat. Daft Punk)</text>
+  <text x="560" y="215" fill="#c0c0d2" font-family="sans-serif" font-size="12">The Weeknd</text>
+  <text x="760" y="215" fill="#8e8ea0" font-family="sans-serif" font-size="12">Starboy</text>
+  <text x="960" y="215" fill="#717185" font-family="sans-serif" font-size="12" text-anchor="end">3:50</text>
+
+  <!-- Song Row 3 -->
+  <rect x="244" y="234" width="756" height="40" rx="6" fill="#161620"/>
+  <text x="260" y="259" fill="#636378" font-family="sans-serif" font-size="12">03</text>
+  <text x="296" y="259" fill="#f0f0f5" font-family="sans-serif" font-size="13" font-weight="600">Resonance</text>
+  <text x="560" y="259" fill="#c0c0d2" font-family="sans-serif" font-size="12">HOME</text>
+  <text x="760" y="259" fill="#8e8ea0" font-family="sans-serif" font-size="12">Odyssey</text>
+  <text x="960" y="259" fill="#717185" font-family="sans-serif" font-size="12" text-anchor="end">3:32</text>
+
+  <!-- Song Row 4 -->
+  <rect x="244" y="278" width="756" height="40" rx="6" fill="#13131a"/>
+  <text x="260" y="303" fill="#636378" font-family="sans-serif" font-size="12">04</text>
+  <text x="296" y="303" fill="#f0f0f5" font-family="sans-serif" font-size="13" font-weight="600">Blinding Lights</text>
+  <text x="560" y="303" fill="#c0c0d2" font-family="sans-serif" font-size="12">The Weeknd</text>
+  <text x="760" y="303" fill="#8e8ea0" font-family="sans-serif" font-size="12">After Hours</text>
+  <text x="960" y="303" fill="#717185" font-family="sans-serif" font-size="12" text-anchor="end">3:20</text>
+
+  <!-- Song Row 5 -->
+  <rect x="244" y="322" width="756" height="40" rx="6" fill="#161620"/>
+  <text x="260" y="347" fill="#636378" font-family="sans-serif" font-size="12">05</text>
+  <text x="296" y="347" fill="#f0f0f5" font-family="sans-serif" font-size="13" font-weight="600">Get Lucky (feat. Pharrell Williams)</text>
+  <text x="560" y="347" fill="#c0c0d2" font-family="sans-serif" font-size="12">Daft Punk</text>
+  <text x="760" y="347" fill="#8e8ea0" font-family="sans-serif" font-size="12">Random Access Memories</text>
+  <text x="960" y="347" fill="#717185" font-family="sans-serif" font-size="12" text-anchor="end">4:08</text>
+
+  <!-- Bottom PlayerBar -->
+  <rect y="556" width="1024" height="84" fill="#111117" stroke="#262634" stroke-width="1"/>
+  
+  <!-- Mini Cover Art -->
+  <rect x="20" y="570" width="56" height="56" rx="8" fill="#7B2CBF"/>
+  <text x="48" y="604" fill="#00F5D4" font-family="sans-serif" font-size="20" text-anchor="middle">🎵</text>
+  
+  <!-- Track Info -->
+  <text x="88" y="593" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="700">Midnight City</text>
+  <text x="88" y="612" fill="#9393a6" font-family="sans-serif" font-size="12">M83 — Hurry Up, We're Dreaming</text>
+  
+  <!-- Badges: Gapless & ReplayGain -->
+  <rect x="296" y="583" width="70" height="18" rx="4" fill="#1b302c" stroke="#00F5D4" stroke-width="0.8"/>
+  <text x="331" y="596" fill="#00F5D4" font-family="sans-serif" font-size="9" font-weight="700" text-anchor="middle">GAPLESS 0ms</text>
+
+  <rect x="372" y="583" width="80" height="18" rx="4" fill="#2d1d40" stroke="#7B2CBF" stroke-width="0.8"/>
+  <text x="412" y="596" fill="#c084fc" font-family="sans-serif" font-size="9" font-weight="700" text-anchor="middle">REPLAYGAIN</text>
+
+  <!-- Playback Controls (Center) -->
+  <circle cx="512" cy="590" r="18" fill="#00F5D4"/>
+  <polygon points="508,582 508,598 520,590" fill="#0a0a0c"/>
+  
+  <!-- Prev / Next / Shuffle / Repeat -->
+  <text x="472" y="595" fill="#c0c0d0" font-family="sans-serif" font-size="16" text-anchor="middle">⏮</text>
+  <text x="552" y="595" fill="#c0c0d0" font-family="sans-serif" font-size="16" text-anchor="middle">⏭</text>
+  <text x="438" y="595" fill="#00F5D4" font-family="sans-serif" font-size="14" text-anchor="middle">🔀</text>
+  <text x="586" y="595" fill="#888899" font-family="sans-serif" font-size="14" text-anchor="middle">🔁</text>
+
+  <!-- Progress Bar -->
+  <text x="350" y="626" fill="#717185" font-family="sans-serif" font-size="10" text-anchor="end">1:28</text>
+  <rect x="360" y="622" width="304" height="4" rx="2" fill="#2d2d3d"/>
+  <rect x="360" y="622" width="110" height="4" rx="2" fill="#00F5D4"/>
+  <circle cx="470" cy="624" r="5" fill="#ffffff"/>
+  <text x="674" y="626" fill="#717185" font-family="sans-serif" font-size="10">4:03</text>
+
+  <!-- Volume & System Integration (Right) -->
+  <text x="810" y="602" fill="#888899" font-family="sans-serif" font-size="13">🔊</text>
+  <rect x="830" y="599" width="80" height="4" rx="2" fill="#2d2d3d"/>
+  <rect x="830" y="599" width="65" height="4" rx="2" fill="#7B2CBF"/>
+  <circle cx="895" cy="601" r="4" fill="#ffffff"/>
+
+  <!-- OS Badges -->
+  <rect x="926" y="590" width="80" height="22" rx="6" fill="#1a1a24" stroke="#333346" stroke-width="1"/>
+  <text x="966" y="605" fill="#a0a0b2" font-family="sans-serif" font-size="10" font-weight="600" text-anchor="middle">⌨️ MediaKeys</text>
+</svg>

@@ -75,6 +75,8 @@ fun EqualizerScreen(
     var isEnabled by remember { mutableStateOf(eq.isEnabled) }
     var currentPresetName by remember { mutableStateOf(eq.currentPresetName) }
     var bassBoost by remember { mutableStateOf(eq.bassBoostDb) }
+    var isGapless by remember { mutableStateOf(viewModel.player.isGaplessEnabled) }
+    var isReplayGain by remember { mutableStateOf(viewModel.player.isReplayGainEnabled) }
 
     val bandGains = remember {
         mutableStateListOf<Float>().apply {
@@ -401,6 +403,92 @@ fun EqualizerScreen(
                             thumbColor = if (isEnabled) ElectricPurple else TextMuted,
                             activeTrackColor = if (isEnabled) ElectricPurple else DarkCardBorder,
                             inactiveTrackColor = DarkCardBorder
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Opciones de Fidelidad de Audio (Gapless & ReplayGain)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardBorder),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "Fidelidad de Audio y Motor de Sonido",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Fila Gapless Playback
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Reproducción continua sin pausas (Gapless)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Elimina silencios y clics entre canciones manteniendo el DAC activo",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = isGapless,
+                        onCheckedChange = {
+                            isGapless = it
+                            viewModel.player.isGaplessEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = NeonCyan,
+                            checkedTrackColor = NeonCyan.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Fila ReplayGain Normalization
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Normalización de volumen (ReplayGain / EBU R128)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Ajusta la ganancia automática según metadatos para un nivel homogéneo",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = isReplayGain,
+                        onCheckedChange = {
+                            isReplayGain = it
+                            viewModel.player.isReplayGainEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = ElectricPurple,
+                            checkedTrackColor = ElectricPurple.copy(alpha = 0.5f)
                         )
                     )
                 }

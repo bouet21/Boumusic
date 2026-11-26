@@ -3,6 +3,7 @@ package com.boumusic.desktop.ftp
 import com.boumusic.desktop.model.FtpConfig
 import com.boumusic.desktop.model.FtpItem
 import com.boumusic.desktop.smb.SmbManager
+import com.boumusic.desktop.subsonic.SubsonicManager
 import com.boumusic.desktop.webdav.WebDavManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,7 +26,8 @@ import javax.net.ssl.X509TrustManager
 
 class FtpManager(
     val smbManager: SmbManager = SmbManager(),
-    val webDavManager: WebDavManager = WebDavManager()
+    val webDavManager: WebDavManager = WebDavManager(),
+    val subsonicManager: SubsonicManager = SubsonicManager()
 ) {
 
     private val logFile by lazy {
@@ -110,6 +112,7 @@ class FtpManager(
     }
 
     suspend fun testConnection(config: FtpConfig): Result<Boolean> = withContext(Dispatchers.IO) {
+        if (config.isSubsonic) return@withContext subsonicManager.testConnection(config)
         if (config.isSmb) return@withContext smbManager.testConnection(config)
         if (config.isWebDav) return@withContext webDavManager.testConnection(config)
 
@@ -186,6 +189,7 @@ class FtpManager(
     }
 
     suspend fun listDirectory(config: FtpConfig, path: String): Result<List<FtpItem>> = withContext(Dispatchers.IO) {
+        if (config.isSubsonic) return@withContext subsonicManager.listDirectory(config, path)
         if (config.isSmb) return@withContext smbManager.listDirectory(config, path)
         if (config.isWebDav) return@withContext webDavManager.listDirectory(config, path)
 
@@ -291,6 +295,7 @@ class FtpManager(
     }
 
     fun openStream(config: FtpConfig, remotePath: String): InputStream {
+        if (config.isSubsonic) return subsonicManager.openStream(config, remotePath)
         if (config.isSmb) return smbManager.openStream(config, remotePath)
         if (config.isWebDav) return webDavManager.openStream(config, remotePath)
 
@@ -344,6 +349,10 @@ class FtpManager(
 
     suspend fun downloadSong(config: FtpConfig, remotePath: String, destFile: File, onProgress: (Int) -> Unit): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
+            if (config.isSubsonic) {
+                val ok = subsonicManager.downloadFile(config, remotePath, destFile, onProgress)
+                return@withContext if (ok) Result.success(true) else Result.failure(Exception("Error al descargar desde Subsonic"))
+            }
             if (config.isSmb) {
                 val ok = smbManager.downloadFile(config, remotePath, destFile, onProgress)
                 return@withContext if (ok) Result.success(true) else Result.failure(Exception("Error SMB"))
@@ -391,6 +400,7 @@ class FtpManager(
     }
 
     suspend fun listAllAudioRecursive(config: FtpConfig, maxItems: Int = 10000, maxDepth: Int = 6): Result<List<FtpItem>> = withContext(Dispatchers.IO) {
+        if (config.isSubsonic) return@withContext subsonicManager.listAllAudioRecursive(config)
         if (config.isSmb) return@withContext smbManager.listAllAudioRecursive(config, maxItems, maxDepth)
         if (config.isWebDav) return@withContext webDavManager.listAllAudioRecursive(config, maxItems, maxDepth)
 

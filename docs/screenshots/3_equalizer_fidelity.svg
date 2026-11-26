@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 640" width="1024" height="640">
+  <defs>
+    <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0c"/>
+      <stop offset="100%" stop-color="#121216"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="640" rx="12" fill="url(#bg3)" stroke="#2d2d38" stroke-width="1.5"/>
+
+  <!-- TitleBar -->
+  <rect width="1024" height="38" rx="12" fill="#14141a"/>
+  <rect y="26" width="1024" height="12" fill="#14141a"/>
+  <circle cx="20" cy="19" r="6" fill="#EF4444"/>
+  <circle cx="38" cy="19" r="6" fill="#F59E0B"/>
+  <circle cx="56" cy="19" r="6" fill="#10B981"/>
+  <text x="512" y="24" fill="#a0a0b2" font-family="sans-serif" font-size="12" font-weight="600" text-anchor="middle">Boumusic Desktop — Ecualizador &amp; Motor de Audio de Alta Fidelidad</text>
+
+  <!-- Sidebar -->
+  <rect x="0" y="38" width="220" height="602" fill="#0f0f14"/>
+  <line x1="220" y1="38" x2="220" y2="640" stroke="#23232e" stroke-width="1"/>
+  <text x="24" y="76" fill="#00F5D4" font-family="sans-serif" font-size="20" font-weight="900">⚡ BOUMUSIC</text>
+
+  <text x="32" y="123" fill="#8e8ea0" font-family="sans-serif" font-size="13">🎵  Biblioteca Local</text>
+  <text x="32" y="162" fill="#8e8ea0" font-family="sans-serif" font-size="13">📑  Listas de Reproducción</text>
+  <text x="32" y="200" fill="#8e8ea0" font-family="sans-serif" font-size="13">⏳  Cola de Reproducción</text>
+  <text x="32" y="238" fill="#8e8ea0" font-family="sans-serif" font-size="13">⬇️  Descargas (SpotDL)</text>
+  <text x="32" y="276" fill="#8e8ea0" font-family="sans-serif" font-size="13">🌐  Servidores Remotos</text>
+  <text x="32" y="314" fill="#8e8ea0" font-family="sans-serif" font-size="13">🔄  Sincronización &amp; Backup</text>
+  
+  <!-- Active Tab -->
+  <rect x="12" y="336" width="196" height="36" rx="8" fill="#1f1f2c"/>
+  <rect x="12" y="336" width="3" height="36" rx="1.5" fill="#00F5D4"/>
+  <text x="32" y="359" fill="#00F5D4" font-family="sans-serif" font-size="13" font-weight="700">🎛️  Ecualizador &amp; Gapless</text>
+  
+  <text x="32" y="398" fill="#8e8ea0" font-family="sans-serif" font-size="13">🎨  Personalización UI</text>
+
+  <!-- Main Content Header -->
+  <text x="250" y="80" fill="#ffffff" font-family="sans-serif" font-size="22" font-weight="800">Ecualizador de Audio</text>
+  <text x="250" y="100" fill="#8e8ea0" font-family="sans-serif" font-size="12">Filtros Biquad IIR de segundo orden con cálculo flotante en tiempo real y respuesta sin latencia</text>
+
+  <!-- Presets Bar -->
+  <text x="250" y="130" fill="#a0a0b5" font-family="sans-serif" font-size="11" font-weight="700">PRESETS DE ESTUDIO:</text>
+  
+  <rect x="250" y="140" width="70" height="28" rx="6" fill="#1c1c28"/>
+  <text x="285" y="158" fill="#8e8ea0" font-family="sans-serif" font-size="11" text-anchor="middle">Plano</text>
+
+  <rect x="328" y="140" width="70" height="28" rx="6" fill="#7B2CBF"/>
+  <text x="363" y="158" fill="#ffffff" font-family="sans-serif" font-size="11" font-weight="700" text-anchor="middle">Rock</text>
+
+  <rect x="406" y="140" width="70" height="28" rx="6" fill="#1c1c28"/>
+  <text x="441" y="158" fill="#8e8ea0" font-family="sans-serif" font-size="11" text-anchor="middle">Pop</text>
+
+  <rect x="484" y="140" width="80" height="28" rx="6" fill="#1c1c28"/>
+  <text x="524" y="158" fill="#8e8ea0" font-family="sans-serif" font-size="11" text-anchor="middle">Electrónica</text>
+
+  <rect x="572" y="140" width="130" height="28" rx="6" fill="#1c1c28"/>
+  <text x="637" y="158" fill="#8e8ea0" font-family="sans-serif" font-size="11" text-anchor="middle">Refuerzo Graves</text>
+
+  <rect x="710" y="140" width="80" height="28" rx="6" fill="#1c1c28"/>
+  <text x="750" y="158" fill="#8e8ea0" font-family="sans-serif" font-size="11" text-anchor="middle">Acústico</text>
+
+  <!-- 5 Bands Equalizer Card -->
+  <rect x="250" y="186" width="730" height="175" rx="12" fill="#15151e" stroke="#2c2c3e" stroke-width="1"/>
+  <text x="270" y="210" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700">Bandas de Frecuencia (-12 dB a +12 dB)</text>
+
+  <!-- Band 1: 60Hz (+4.0 dB) -->
+  <text x="310" y="235" fill="#00F5D4" font-family="sans-serif" font-size="11" font-weight="700" text-anchor="middle">+4.0 dB</text>
+  <rect x="260" y="246" width="100" height="6" rx="3" fill="#2d2d3e"/>
+  <rect x="260" y="246" width="68" height="6" rx="3" fill="#00F5D4"/>
+  <circle cx="328" cy="249" r="6" fill="#ffffff"/>
+  <text x="310" y="272" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700" text-anchor="middle">60 Hz</text>
+  <text x="310" y="288" fill="#717185" font-family="sans-serif" font-size="10" text-anchor="middle">Sub-graves</text>
+
+  <!-- Band 2: 230Hz (+2.0 dB) -->
+  <text x="450" y="235" fill="#00F5D4" font-family="sans-serif" font-size="11" font-weight="700" text-anchor="middle">+2.0 dB</text>
+  <rect x="400" y="246" width="100" height="6" rx="3" fill="#2d2d3e"/>
+  <rect x="400" y="246" width="60" height="6" rx="3" fill="#00F5D4"/>
+  <circle cx="460" cy="249" r="6" fill="#ffffff"/>
+  <text x="450" y="272" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700" text-anchor="middle">230 Hz</text>
+  <text x="450" y="288" fill="#717185" font-family="sans-serif" font-size="10" text-anchor="middle">Graves</text>
+
+  <!-- Band 3: 910Hz (-1.0 dB) -->
+  <text x="590" y="235" fill="#c084fc" font-family="sans-serif" font-size="11" font-weight="700" text-anchor="middle">-1.0 dB</text>
+  <rect x="540" y="246" width="100" height="6" rx="3" fill="#2d2d3e"/>
+  <rect x="540" y="246" width="45" height="6" rx="3" fill="#7B2CBF"/>
+  <circle cx="585" cy="249" r="6" fill="#ffffff"/>
+  <text x="590" y="272" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700" text-anchor="middle">910 Hz</text>
+  <text x="590" y="288" fill="#717185" font-family="sans-serif" font-size="10" text-anchor="middle">Medios</text>
+
+  <!-- Band 4: 3.6kHz (+3.0 dB) -->
+  <text x="730" y="235" fill="#00F5D4" font-family="sans-serif" font-size="11" font-weight="700" text-anchor="middle">+3.0 dB</text>
+  <rect x="680" y="246" width="100" height="6" rx="3" fill="#2d2d3e"/>
+  <rect x="680" y="246" width="64" height="6" rx="3" fill="#00F5D4"/>
+  <circle cx="744" cy="249" r="6" fill="#ffffff"/>
+  <text x="730" y="272" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700" text-anchor="middle">3.6 kHz</text>
+  <text x="730" y="288" fill="#717185" font-family="sans-serif" font-size="10" text-anchor="middle">Presencia</text>
+
+  <!-- Band 5: 14kHz (+5.0 dB) -->
+  <text x="870" y="235" fill="#00F5D4" font-family="sans-serif" font-size="11" font-weight="700" text-anchor="middle">+5.0 dB</text>
+  <rect x="820" y="246" width="100" height="6" rx="3" fill="#2d2d3e"/>
+  <rect x="820" y="246" width="75" height="6" rx="3" fill="#00F5D4"/>
+  <circle cx="895" cy="249" r="6" fill="#ffffff"/>
+  <text x="870" y="272" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700" text-anchor="middle">14 kHz</text>
+  <text x="870" y="288" fill="#717185" font-family="sans-serif" font-size="10" text-anchor="middle">Agudos</text>
+
+  <!-- Bass Boost & High Fidelity Sound Engine Card -->
+  <rect x="250" y="380" width="730" height="230" rx="14" fill="#171722" stroke="#00F5D4" stroke-width="1.2"/>
+  
+  <text x="274" y="412" fill="#ffffff" font-family="sans-serif" font-size="15" font-weight="800">Fidelidad de Audio y Motor de Sonido</text>
+
+  <!-- Gapless Row -->
+  <text x="274" y="445" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700">Reproducción continua sin pausas (Gapless)</text>
+  <text x="274" y="463" fill="#8e8ea0" font-family="sans-serif" font-size="11">Pre-buffer inteligente y transición continua en la línea PCM de audio sin silencios ni paradas de DAC</text>
+  <!-- Switch ON -->
+  <rect x="910" y="440" width="46" height="24" rx="12" fill="#00F5D4"/>
+  <circle cx="944" cy="452" r="9" fill="#0a0a0c"/>
+
+  <line x1="274" y1="482" x2="956" y2="482" stroke="#252535" stroke-width="1"/>
+
+  <!-- ReplayGain Row -->
+  <text x="274" y="510" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700">Normalización de volumen (ReplayGain / EBU R128)</text>
+  <text x="274" y="528" fill="#8e8ea0" font-family="sans-serif" font-size="11">Ajuste automático de ganancia acústica por pista y álbum con limitador anti-clipping integrado</text>
+  <!-- Switch ON -->
+  <rect x="910" y="505" width="46" height="24" rx="12" fill="#7B2CBF"/>
+  <circle cx="944" cy="517" r="9" fill="#ffffff"/>
+
+  <line x1="274" y1="548" x2="956" y2="548" stroke="#252535" stroke-width="1"/>
+
+  <!-- Bass Boost Row -->
+  <text x="274" y="575" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="700">Refuerzo Dinámico de Graves (Bass Boost): +3.5 dB</text>
+  <rect x="680" y="568" width="220" height="6" rx="3" fill="#2d2d3e"/>
+  <rect x="680" y="568" width="90" height="6" rx="3" fill="#7B2CBF"/>
+  <circle cx="770" cy="571" r="6" fill="#ffffff"/>
+  <text x="918" y="576" fill="#c084fc" font-family="sans-serif" font-size="12" font-weight="700">+3.5 dB</text>
+</svg>

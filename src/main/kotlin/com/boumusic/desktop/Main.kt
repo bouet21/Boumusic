@@ -19,6 +19,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.isTraySupported
 import androidx.compose.ui.window.rememberWindowState
+import com.boumusic.desktop.system.MediaKeyManager
 import com.boumusic.desktop.ui.components.AddToPlaylistDialog
 import com.boumusic.desktop.ui.components.PlayerBar
 import com.boumusic.desktop.ui.components.Sidebar
@@ -44,6 +45,13 @@ fun main() {
     application {
         val windowState = rememberWindowState(width = 1140.dp, height = 760.dp)
     val viewModel = remember { DesktopMusicViewModel() }
+    val mediaKeyManager = remember {
+        MediaKeyManager(
+            onPlayPause = { viewModel.player.togglePlayPause() },
+            onNext = { viewModel.playNext() },
+            onPrevious = { viewModel.playPrevious() }
+        ).apply { start() }
+    }
     val currentSection by viewModel.currentSection.collectAsState()
 
     val showSleepTimer by viewModel.showSleepTimerDialog.collectAsState()
@@ -103,14 +111,20 @@ fun main() {
                 Separator()
                 Item(
                     text = "Salir",
-                    onClick = ::exitApplication
+                    onClick = {
+                        mediaKeyManager.stop()
+                        exitApplication()
+                    }
                 )
             }
         )
     }
 
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = {
+            mediaKeyManager.stop()
+            exitApplication()
+        },
         title = windowTitle,
         state = windowState,
         icon = appIcon

@@ -13,10 +13,12 @@ data class FtpConfig(
     val isWebDav: Boolean = false,
     val webDavPath: String = "/",
     val isSmb: Boolean = false,
-    val smbShare: String = ""
+    val smbShare: String = "",
+    val isSubsonic: Boolean = false
 ) {
     val protocolLabel: String
         get() = when {
+            isSubsonic -> "Subsonic / Navidrome"
             isSmb -> "SMB (Windows/Linux)"
             isWebDav -> "WebDAV"
             isFtps -> "FTPS"

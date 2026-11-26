@@ -341,4 +341,69 @@ class DesktopMusicTest {
 
         assertEquals("Texto sin prefijo debe devolverse idéntico", "plainPassword", com.boumusic.desktop.data.CredentialCipher.decrypt("plainPassword"))
     }
+
+    @Test
+    fun testSubsonicManager() {
+        val subsonic = com.boumusic.desktop.subsonic.SubsonicManager()
+        val config = FtpConfig(
+            name = "Navidrome",
+            host = "http://192.168.1.50:4533",
+            username = "admin",
+            password = "secretpassword",
+            isSubsonic = true
+        )
+        assertEquals("Subsonic / Navidrome", config.protocolLabel)
+
+        val baseUrl = subsonic.buildBaseUrl(config)
+        assertEquals("http://192.168.1.50:4533", baseUrl)
+
+        val configHttps = FtpConfig(
+            name = "Subsonic Cloud",
+            host = "music.boumusic.com",
+            port = 443,
+            isFtps = true,
+            username = "user",
+            password = "pass",
+            isSubsonic = true
+        )
+        assertEquals("https://music.boumusic.com", subsonic.buildBaseUrl(configHttps))
+
+        val auth = subsonic.getAuthParams(config)
+        assertTrue("Los parámetros de autenticación deben incluir usuario", auth.contains("u=admin"))
+        assertTrue("Los parámetros de autenticación deben incluir token", auth.contains("&t="))
+        assertTrue("Los parámetros de autenticación deben incluir salt", auth.contains("&s="))
+        assertTrue("Los parámetros de autenticación deben solicitar json", auth.contains("f=json"))
+        assertTrue("Los parámetros de autenticación deben definir versión", auth.contains("v=1.16.1"))
+    }
+
+    @Test
+    fun testMediaKeyManagerLifecycle() {
+        var played = false
+        val manager = com.boumusic.desktop.system.MediaKeyManager(
+            onPlayPause = { played = true },
+            onNext = {},
+            onPrevious = {}
+        )
+        // Iniciar y detener no debe lanzar excepciones
+        manager.start()
+        Thread.sleep(100)
+        manager.stop()
+        assertFalse(played)
+    }
+
+    @Test
+    fun testReplayGainParsingAndPlayerProperties() {
+        val g1 = com.boumusic.desktop.audio.AudioMetadataHelper.parseGainDb("-6.50 dB")
+        assertEquals(-6.50f, g1 ?: 0f, 0.01f)
+
+        val g2 = com.boumusic.desktop.audio.AudioMetadataHelper.parseGainDb("+3.2 dB")
+        assertEquals(3.2f, g2 ?: 0f, 0.01f)
+
+        val g3 = com.boumusic.desktop.audio.AudioMetadataHelper.parseGainDb("-4.15")
+        assertEquals(-4.15f, g3 ?: 0f, 0.01f)
+
+        val player = com.boumusic.desktop.audio.AudioPlayer()
+        assertTrue("Gapless debe estar habilitado por defecto", player.isGaplessEnabled)
+        assertTrue("ReplayGain debe estar habilitado por defecto", player.isReplayGainEnabled)
+    }
 }

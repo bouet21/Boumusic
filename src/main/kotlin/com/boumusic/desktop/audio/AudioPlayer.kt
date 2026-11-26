@@ -60,6 +60,15 @@ class AudioPlayer {
     @Volatile
     private var softwareVolume: Float = 0.85f
 
+    var isGaplessEnabled: Boolean = true
+    var isReplayGainEnabled: Boolean = true
+    var nextTrackProvider: (() -> Pair<Song, (() -> InputStream)?>?)? = null
+    var onTrackTransitioned: ((Song) -> Unit)? = null
+
+    @Volatile
+    var currentReplayGainDb: Float? = null
+        private set
+
     var onSongFinished: (() -> Unit)? = null
     var onSongPlaybackLogged: ((Song, Long) -> Unit)? = null
     var onMetadataUpdated: ((Song) -> Unit)? = null
@@ -149,6 +158,7 @@ class AudioPlayer {
             if (detectedDurationSec > 0L) {
                 _durationSec.value = detectedDurationSec
             }
+            currentReplayGainDb = meta.replayGainTrackDb
 
             // Enriquecer la canción actual con título, artista, álbum y duración reales
             val cur = _currentSong.value
@@ -246,14 +256,85 @@ class AudioPlayer {
                     continue
                 }
 
-                bytesRead = decodedStream.read(buffer, 0, buffer.size)
+                bytesRead = decodedStream?.read(buffer, 0, buffer.size) ?: -1
                 if (bytesRead == -1) {
+                    if (isGaplessEnabled && generation == currentGeneration) {
+                        val nextTrackData = nextTrackProvider?.invoke()
+                        if (nextTrackData != null) {
+                            val (nextSong, nextStreamProvider) = nextTrackData
+                            var nextRaw: InputStream? = null
+                            var nextIn: AudioInputStream? = null
+                            var nextDecoded: AudioInputStream? = null
+                            try {
+                                nextRaw = if (nextStreamProvider != null) {
+                                    nextStreamProvider()
+                                } else {
+                                    val f = File(nextSong.path)
+                                    if (f.exists()) FileInputStream(f) else null
+                                }
+                                if (nextRaw != null) {
+                                    val nextBuffered = BufferedInputStream(nextRaw, 256 * 1024)
+                                    val nextMeta = AudioMetadataHelper.extractMetadata(nextBuffered, if (!nextSong.isRemote) File(nextSong.path).length() else nextSong.fileSize)
+                                    nextIn = AudioSystem.getAudioInputStream(nextBuffered)
+                                    val nextBaseFormat = nextIn.format
+                                    val nextSampleRate = if (nextBaseFormat.sampleRate > 0) nextBaseFormat.sampleRate else 44100.0f
+                                    val nextChannels = if (nextBaseFormat.channels > 0) nextBaseFormat.channels else 2
+
+                                    if (nextSampleRate == sampleRate && nextChannels == channels) {
+                                        nextDecoded = AudioSystem.getAudioInputStream(decodedFormat, nextIn)
+
+                                        val finishedSong = _currentSong.value
+                                        val playedSec = _currentPositionSec.value
+                                        if (finishedSong != null && playedSec >= 5L) {
+                                            onSongPlaybackLogged?.invoke(finishedSong, playedSec * 1000L)
+                                        }
+
+                                        try { decodedStream?.close() } catch (_: Exception) {}
+                                        try { inStream?.close() } catch (_: Exception) {}
+                                        try { rawStream?.close() } catch (_: Exception) {}
+
+                                        rawStream = nextRaw
+                                        inStream = nextIn
+                                        decodedStream = nextDecoded
+                                        synchronized(lock) {
+                                            activeStream = nextRaw
+                                        }
+
+                                        _currentSong.value = nextSong
+                                        _currentPositionSec.value = 0L
+                                        val nextDur = if (nextMeta.durationSec > 0) nextMeta.durationSec else (nextSong.duration / 1000L).coerceAtLeast(1L)
+                                        _durationSec.value = nextDur
+                                        currentReplayGainDb = nextMeta.replayGainTrackDb
+                                        totalBytesRead = 0L
+                                        naturalEof = false
+                                        onTrackTransitioned?.invoke(nextSong)
+                                        continue
+                                    } else {
+                                        try { nextDecoded?.close() } catch (_: Exception) {}
+                                        try { nextIn.close() } catch (_: Exception) {}
+                                        try { nextRaw.close() } catch (_: Exception) {}
+                                    }
+                                }
+                            } catch (_: Exception) {
+                                try { nextDecoded?.close() } catch (_: Exception) {}
+                                try { nextIn?.close() } catch (_: Exception) {}
+                                try { nextRaw?.close() } catch (_: Exception) {}
+                            }
+                        }
+                    }
                     naturalEof = true
                     break
                 }
 
-                // Procesamiento instantáneo de ecualizador y volumen en PCM
-                equalizer.processPcmBuffer(buffer, bytesRead, channels, softwareVolume)
+                // Procesamiento instantáneo de ecualizador, volumen y ReplayGain en PCM
+                val gainDb = if (isReplayGainEnabled) currentReplayGainDb else null
+                val replayGainMultiplier = if (gainDb != null) {
+                    Math.pow(10.0, gainDb.toDouble() / 20.0).toFloat().coerceIn(0.15f, 2.5f)
+                } else {
+                    1.0f
+                }
+                val effectiveVol = (softwareVolume * replayGainMultiplier).coerceIn(0f, 1.25f)
+                equalizer.processPcmBuffer(buffer, bytesRead, channels, effectiveVol)
 
                 line.write(buffer, 0, bytesRead)
                 totalBytesRead += bytesRead

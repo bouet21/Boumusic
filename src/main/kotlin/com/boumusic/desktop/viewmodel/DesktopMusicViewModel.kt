@@ -270,6 +270,42 @@ class DesktopMusicViewModel(
             ?: _savedServers.value.firstOrNull()
     }
 
+    fun buildStreamProvider(song: Song): (() -> java.io.InputStream)? {
+        if (!song.isRemote) return null
+        val config = findServerForSong(song) ?: return null
+        return { ftpManager.openStream(config, song.remotePath) }
+    }
+
+    fun peekNextSong(): Pair<Song, (() -> java.io.InputStream)?>? {
+        val q = _playbackQueue.value
+        if (q.isEmpty()) return null
+
+        if (_repeatMode.value == RepeatMode.ONE) {
+            val sameSong = q.getOrNull(currentIndex) ?: return null
+            return sameSong to buildStreamProvider(sameSong)
+        }
+
+        if (historyPointer >= 0 && historyPointer < playHistory.size - 1) {
+            val nextSong = playHistory[historyPointer + 1]
+            return nextSong to buildStreamProvider(nextSong)
+        }
+
+        val nextSong = if (_isShuffle.value) {
+            val nextIdx = unplayedShuffleIndices.firstOrNull() ?: return null
+            q.getOrNull(nextIdx)
+        } else {
+            if (currentIndex + 1 < q.size) {
+                q[currentIndex + 1]
+            } else if (_repeatMode.value == RepeatMode.ALL) {
+                q.firstOrNull()
+            } else {
+                null
+            }
+        } ?: return null
+
+        return nextSong to buildStreamProvider(nextSong)
+    }
+
     private fun playSongInternal(song: Song) {
         if (song.isRemote) {
             val config = findServerForSong(song)
@@ -934,6 +970,19 @@ class DesktopMusicViewModel(
 
     init {
         player.onSongFinished = { playNext(fromUser = false) }
+        player.nextTrackProvider = { peekNextSong() }
+        player.onTrackTransitioned = { transitionedSong ->
+            val q = _playbackQueue.value
+            val idx = q.indexOfFirst { it.id == transitionedSong.id }
+            if (idx != -1) {
+                currentIndex = idx
+            }
+            if (_isShuffle.value && unplayedShuffleIndices.isNotEmpty()) {
+                unplayedShuffleIndices.remove(idx)
+            }
+            playHistory.add(transitionedSong)
+            historyPointer = playHistory.size - 1
+        }
         player.onSongPlaybackLogged = { song, durationMs ->
             historyManager.recordPlayback(song, durationMs)
         }

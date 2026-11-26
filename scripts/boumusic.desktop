@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Boumusic
+GenericName=Reproductor de Música
+Comment=Reproductor de audio moderno, ligero y de alta fidelidad con soporte Subsonic, SMB, WebDAV y FTP
+Exec=Boumusic %U
+Icon=boumusic
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=music;player;audio;subsonic;navidrome;jellyfin;streaming;flac;mp3;
+StartupWMClass=com-boumusic-desktop-MainKt
+MimeType=audio/mpeg;audio/x-mpeg;audio/mp3;audio/x-mp3;audio/flac;audio/x-flac;audio/ogg;audio/x-vorbis+ogg;audio/wav;audio/x-wav;

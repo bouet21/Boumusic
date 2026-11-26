@@ -9,7 +9,8 @@ data class AudioTrackMetadata(
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
-    val durationSec: Long = 0L
+    val durationSec: Long = 0L,
+    val replayGainTrackDb: Float? = null
 )
 
 object AudioMetadataHelper {
@@ -30,6 +31,7 @@ object AudioMetadataHelper {
         var title: String? = null
         var artist: String? = null
         var album: String? = null
+        var replayGainDb: Float? = null
 
         try {
             val maxHeaderRead = 128 * 1024
@@ -65,7 +67,8 @@ object AudioMetadataHelper {
                     title = flacMeta.title,
                     artist = flacMeta.artist,
                     album = flacMeta.album,
-                    durationSec = durationSec
+                    durationSec = durationSec,
+                    replayGainTrackDb = flacMeta.replayGainTrackDb
                 )
             }
 
@@ -75,6 +78,7 @@ object AudioMetadataHelper {
             artist = id3Meta.artist
             album = id3Meta.album
             durationSec = id3Meta.durationSec
+            replayGainDb = id3Meta.replayGainTrackDb
 
             val mp3Dur = parseMp3Duration(buffer, bytesRead, fileSize)
             if (mp3Dur > 0L && durationSec <= 0L) {
@@ -89,7 +93,8 @@ object AudioMetadataHelper {
             title = title,
             artist = artist,
             album = album,
-            durationSec = durationSec
+            durationSec = durationSec,
+            replayGainTrackDb = replayGainDb
         )
     }
 
@@ -323,6 +328,7 @@ object AudioMetadataHelper {
         var artist: String? = null
         var album: String? = null
         var durationSec = 0L
+        var replayGainDb: Float? = null
 
         if (len < 10) return AudioTrackMetadata()
         if (buffer[0] != 0x49.toByte() || buffer[1] != 0x44.toByte() || buffer[2] != 0x33.toByte()) {
@@ -405,6 +411,12 @@ object AudioMetadataHelper {
                             durationSec = ms / 1000L
                         }
                     }
+                    "TXXX", "RVA2" -> {
+                        if (text.contains("replaygain", ignoreCase = true) || text.contains("gain", ignoreCase = true)) {
+                            val db = parseGainDb(text)
+                            if (db != null && replayGainDb == null) replayGainDb = db
+                        }
+                    }
                 }
                 offset += 10 + frameSize
             }
@@ -414,7 +426,8 @@ object AudioMetadataHelper {
             title = title,
             artist = artist,
             album = album,
-            durationSec = durationSec
+            durationSec = durationSec,
+            replayGainTrackDb = replayGainDb
         )
     }
 
@@ -434,10 +447,25 @@ object AudioMetadataHelper {
         }
     }
 
+    fun parseGainDb(raw: String): Float? {
+        try {
+            val match = Regex("""([-+]?\d+(\.\d+)?)\s*dB""", RegexOption.IGNORE_CASE).find(raw)
+            if (match != null) {
+                return match.groupValues[1].toFloatOrNull()
+            }
+            val numMatch = Regex("""[-+]?\d+(\.\d+)?""").find(raw)
+            if (numMatch != null) {
+                return numMatch.value.toFloatOrNull()
+            }
+        } catch (_: Exception) {}
+        return null
+    }
+
     private fun parseFlacVorbisComment(buffer: ByteArray, len: Int): AudioTrackMetadata {
         var title: String? = null
         var artist: String? = null
         var album: String? = null
+        var replayGainDb: Float? = null
 
         try {
             var blockOffset = 4
@@ -480,6 +508,10 @@ object AudioMetadataHelper {
                                         "TITLE" -> if (title == null) title = value
                                         "ARTIST" -> if (artist == null) artist = value
                                         "ALBUM" -> if (album == null) album = value
+                                        "REPLAYGAIN_TRACK_GAIN", "REPLAYGAIN_ALBUM_GAIN", "R128_TRACK_GAIN" -> {
+                                            val db = parseGainDb(value)
+                                            if (db != null && replayGainDb == null) replayGainDb = db
+                                        }
                                     }
                                 }
                             }
@@ -493,7 +525,7 @@ object AudioMetadataHelper {
             }
         } catch (_: Exception) {}
 
-        return AudioTrackMetadata(title = title, artist = artist, album = album)
+        return AudioTrackMetadata(title = title, artist = artist, album = album, replayGainTrackDb = replayGainDb)
     }
 
     private fun parseMp3Duration(buffer: ByteArray, len: Int, fileSize: Long): Long {
