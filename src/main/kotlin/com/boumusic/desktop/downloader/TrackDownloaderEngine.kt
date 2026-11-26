@@ -32,26 +32,67 @@ class TrackDownloaderEngine(
         .followRedirects(true)
         .build()
 
+    private fun getAppDirectory(): File? {
+        return try {
+            val codeSource = TrackDownloaderEngine::class.java.protectionDomain?.codeSource
+            val location = codeSource?.location?.toURI()?.let { File(it) }
+            val dir = if (location?.isFile == true) location.parentFile?.parentFile else location?.parentFile
+            dir?.takeIf { it.exists() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun getYtDlpBinary(): File {
-        val local = File(binDir, ytdlpName)
-        if (local.exists()) return local
+        val appDir = getAppDirectory()
+        val userDir = File(System.getProperty("user.dir", "."))
+        val resDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
+        val candidates = listOfNotNull(
+            appDir?.let { File(it, "bin/$ytdlpName") },
+            appDir?.let { File(it, "app/bin/$ytdlpName") },
+            appDir?.let { File(it, "resources/bin/$ytdlpName") },
+            appDir?.let { File(it, "app/resources/bin/$ytdlpName") },
+            resDir?.let { File(it, "bin/$ytdlpName") },
+            appDir?.let { File(it, ytdlpName) },
+            File(userDir, "bin/$ytdlpName"),
+            File(userDir, "resources/bin/$ytdlpName"),
+            File(binDir, ytdlpName)
+        )
+        for (c in candidates) {
+            if (c.exists() && (isWindows || c.canExecute())) return c
+        }
         val pathDirs = System.getenv("PATH")?.split(File.pathSeparator) ?: emptyList()
         for (dir in pathDirs) {
             val f = File(dir, ytdlpName)
-            if (f.exists() && f.canExecute()) return f
+            if (f.exists() && (isWindows || f.canExecute())) return f
         }
-        return local
+        return File(binDir, ytdlpName)
     }
 
     fun getFfmpegBinary(): File {
-        val local = File(binDir, ffmpegName)
-        if (local.exists()) return local
+        val appDir = getAppDirectory()
+        val userDir = File(System.getProperty("user.dir", "."))
+        val resDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
+        val candidates = listOfNotNull(
+            appDir?.let { File(it, "bin/$ffmpegName") },
+            appDir?.let { File(it, "app/bin/$ffmpegName") },
+            appDir?.let { File(it, "resources/bin/$ffmpegName") },
+            appDir?.let { File(it, "app/resources/bin/$ffmpegName") },
+            resDir?.let { File(it, "bin/$ffmpegName") },
+            appDir?.let { File(it, ffmpegName) },
+            File(userDir, "bin/$ffmpegName"),
+            File(userDir, "resources/bin/$ffmpegName"),
+            File(binDir, ffmpegName)
+        )
+        for (c in candidates) {
+            if (c.exists() && (isWindows || c.canExecute())) return c
+        }
         val pathDirs = System.getenv("PATH")?.split(File.pathSeparator) ?: emptyList()
         for (dir in pathDirs) {
             val f = File(dir, ffmpegName)
-            if (f.exists() && f.canExecute()) return f
+            if (f.exists() && (isWindows || f.canExecute())) return f
         }
-        return local
+        return File(binDir, ffmpegName)
     }
 
     private val progressPattern = Pattern.compile("\\[download\\]\\s+([0-9.]+)%\\s+of")
@@ -137,7 +178,6 @@ class TrackDownloaderEngine(
         val cmd = mutableListOf(
             ytdlp.absolutePath,
             "--no-playlist",
-            "--add-metadata",
             "--force-overwrites",
             "--no-continue",
             "--no-cache-dir",
@@ -146,12 +186,13 @@ class TrackDownloaderEngine(
         )
 
         if (ffmpeg.exists()) {
-            // Si hay ffmpeg, extraer y convertir a MP3 limpio
+            // Si hay ffmpeg, extraer y convertir a MP3 limpio Y añadir metadatos ID3
+            cmd.add("--add-metadata")
             cmd.addAll(listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "0"))
             cmd.add("--ffmpeg-location")
             cmd.add(ffmpeg.parentFile?.absolutePath ?: ffmpeg.absolutePath)
         } else {
-            // Si NO hay ffmpeg, descargar stream nativo M4A/AAC sin requerir conversión
+            // Si NO hay ffmpeg, descargar stream nativo M4A/AAC sin requerir conversión ni invocar postprocesador ffmpeg
             cmd.addAll(listOf("-f", "ba[ext=m4a]/ba/b"))
         }
 
@@ -199,7 +240,8 @@ class TrackDownloaderEngine(
             // Buscar el archivo generado en tempDir
             val generatedFile = File(tempDir, "$sanitizedBaseName.mp3").takeIf { it.exists() }
                 ?: File(tempDir, "$sanitizedBaseName.m4a").takeIf { it.exists() }
-                ?: tempDir.listFiles()?.firstOrNull { it.name.startsWith(sanitizedBaseName) && it.extension.lowercase() in setOf("mp3", "m4a", "opus", "webm") }
+                ?: File(tempDir, "$sanitizedBaseName.mp4").takeIf { it.exists() }
+                ?: tempDir.listFiles()?.firstOrNull { it.name.startsWith(sanitizedBaseName) && it.extension.lowercase() in setOf("mp3", "m4a", "mp4", "opus", "webm") }
 
             if (generatedFile == null || !generatedFile.exists() || generatedFile.length() < 1024) {
                 val err = "No se generó el archivo de audio"

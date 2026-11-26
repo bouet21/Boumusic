@@ -16,3 +16,6 @@ Boumusic-Linux-*/
 scripts/*.ps1
 *.log
 linux-job-logs.txt
+bin/
+resources/bin/
+

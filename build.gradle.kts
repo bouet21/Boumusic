@@ -97,6 +97,7 @@ compose.desktop {
                 shortcut = true
                 iconFile.set(project.file("src/main/resources/icons/icon.png"))
             }
+            appResourcesRootDir.set(project.file("resources"))
         }
     }
 }
