@@ -63,8 +63,12 @@ if [ ! -f "appimagetool" ]; then
     chmod +x appimagetool
 fi
 
+if [ ! -d "squashfs-root" ]; then
+    ./appimagetool --appimage-extract
+fi
+
 echo "=== [5/5] Creando Boumusic-$VERSION-x86_64.AppImage ==="
-ARCH=x86_64 ./appimagetool --no-appstream "$APP_DIR" "$OUTPUT_DIR/Boumusic-$VERSION-x86_64.AppImage"
+ARCH=x86_64 ./squashfs-root/AppRun --no-appstream "$APP_DIR" "$OUTPUT_DIR/Boumusic-$VERSION-x86_64.AppImage"
 
 echo "=== Proceso completado con éxito ==="
 echo "AppImage generado en: $OUTPUT_DIR/Boumusic-$VERSION-x86_64.AppImage"

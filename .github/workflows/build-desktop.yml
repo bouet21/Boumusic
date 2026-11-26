@@ -30,7 +30,7 @@ jobs:
       - name: Grant execute permission for gradlew and scripts
         run: |
           chmod +x gradlew
-          chmod +x scripts/*.sh || true
+          chmod +x scripts/*.sh
 
       - name: Run Tests
         run: ./gradlew test
@@ -38,53 +38,17 @@ jobs:
       - name: Package Standalone Linux Distribution
         run: ./gradlew createDistributable
 
-      - name: Create Linux Tarball and AppImage
+      - name: Build Linux Tarball
+        run: bash scripts/build-linux-tarball.sh
+
+      - name: Build Linux AppImage
+        run: bash scripts/build-linux-appimage.sh
+
+      - name: Prepare Assets Directory
         run: |
           mkdir -p dist
-          VERSION="2.1.0"
-          DIST_DIR="build/compose/binaries/main/app/boumusic"
-          if [ ! -d "$DIST_DIR" ]; then
-              DIST_DIR="build/compose/binaries/main/app/Boumusic"
-          fi
-
-          echo "Distributable directory: $DIST_DIR"
-          chmod +x "$DIST_DIR/boumusic" || true
-
-          # 1. Tarball
-          tar -czf "dist/Boumusic-$VERSION-linux-x64.tar.gz" -C "$(dirname "$DIST_DIR")" "$(basename "$DIST_DIR")"
-          echo "Tarball created successfully"
-
-          # 2. AppImage
-          APP_DIR="build/appimage/Boumusic.AppDir"
-          mkdir -p "$APP_DIR/usr/bin"
-          mkdir -p "$APP_DIR/usr/lib"
-          mkdir -p "$APP_DIR/usr/share/applications"
-          mkdir -p "$APP_DIR/usr/share/icons/hicolor/256x256/apps"
-
-          cp -r "$DIST_DIR"/* "$APP_DIR/usr/bin/"
-          cp scripts/boumusic.desktop "$APP_DIR/usr/share/applications/boumusic.desktop"
-          cp scripts/boumusic.desktop "$APP_DIR/boumusic.desktop"
-          cp src/main/resources/icons/icon.png "$APP_DIR/usr/share/icons/hicolor/256x256/apps/boumusic.png"
-          cp src/main/resources/icons/icon.png "$APP_DIR/boumusic.png"
-          cp src/main/resources/icons/icon.png "$APP_DIR/.DirIcon"
-
-          cat << 'EOF' > "$APP_DIR/AppRun"
-#!/bin/sh
-SELF=$(readlink -f "$0")
-HERE=${SELF%/*}
-export PATH="${HERE}/usr/bin:${PATH}"
-export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/bin/runtime/lib:${LD_LIBRARY_PATH}"
-cd "$HERE/usr/bin"
-exec ./boumusic "$@"
-EOF
-          chmod +x "$APP_DIR/AppRun"
-
-          curl -L -o appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
-          chmod +x appimagetool
-          ./appimagetool --appimage-extract
-          ARCH=x86_64 ./squashfs-root/AppRun --no-appstream "$APP_DIR" "dist/Boumusic-$VERSION-x86_64.AppImage"
-          echo "AppImage created successfully"
-
+          cp build/compose/binaries/main/tarball/*.tar.gz dist/
+          cp build/compose/binaries/main/appimage/*.AppImage dist/
           ls -la dist/
           sha256sum dist/*
 
@@ -92,12 +56,10 @@ EOF
         uses: actions/upload-artifact@v4
         with:
           name: Boumusic-Linux-v2.1.0-Binaries
-          path: |
-            dist/Boumusic-2.1.0-linux-x64.tar.gz
-            dist/Boumusic-2.1.0-x86_64.AppImage
+          path: dist/*
 
       - name: Upload to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload v2.1.0 dist/Boumusic-2.1.0-linux-x64.tar.gz dist/Boumusic-2.1.0-x86_64.AppImage --clobber
+          gh release upload v2.1.0 dist/* --clobber
