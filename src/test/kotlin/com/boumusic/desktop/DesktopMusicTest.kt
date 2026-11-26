@@ -322,6 +322,39 @@ class DesktopMusicTest {
     }
 
     @Test
+    fun testRealDownloadExecution() {
+        val repo = com.boumusic.desktop.data.MusicRepository()
+        val ftp = com.boumusic.desktop.ftp.FtpManager()
+        val engine = com.boumusic.desktop.downloader.TrackDownloaderEngine(repo, ftp, ftp.smbManager)
+        val track = com.boumusic.desktop.downloader.DownloadTrackItem(
+            id = "test-1",
+            title = "Shape of You",
+            artist = "Ed Sheeran",
+            album = "Divide",
+            durationMs = 233000L,
+            spotifyUrl = "https://open.spotify.com/track/7qiZfU4dY1lWllzX7mPBI3"
+        )
+        val task = com.boumusic.desktop.downloader.DownloadTask(
+            id = "task-test-1",
+            track = track,
+            destination = com.boumusic.desktop.downloader.DownloadDestination(
+                type = com.boumusic.desktop.downloader.DestinationType.LOCAL,
+                label = "Local",
+                localFolder = engine.tempDir
+            )
+        )
+        kotlinx.coroutines.runBlocking {
+            val res = engine.executeDownload(task) { updated ->
+                println("UPDATE: stage=${updated.stage}, progress=${updated.progress}, status=${updated.statusMessage}, error=${updated.error}")
+            }
+            println("FINAL RESULT: $res")
+            if (res.isFailure) {
+                res.exceptionOrNull()?.printStackTrace()
+            }
+        }
+    }
+
+    @Test
     fun testSearchResolverTextQuery() {
         try {
             kotlinx.coroutines.runBlocking {
@@ -411,5 +444,18 @@ class DesktopMusicTest {
         val player = com.boumusic.desktop.audio.AudioPlayer()
         assertTrue("Gapless debe estar habilitado por defecto", player.isGaplessEnabled)
         assertTrue("ReplayGain debe estar habilitado por defecto", player.isReplayGainEnabled)
+    }
+
+    @Test
+    fun testHighFidelityAudioResolverResolution() {
+        val res = com.boumusic.desktop.downloader.HighFidelityAudioResolver.resolveDirectStream("Ed Sheeran", "Shape of You")
+        if (res != null) {
+            assertTrue("Stream URL debe ser un enlace HTTP válido", res.streamUrl.startsWith("http"))
+            assertTrue("Debe contener extensión de audio", res.extension == "m4a" || res.extension == "mp3")
+        }
+        val resQuery = com.boumusic.desktop.downloader.HighFidelityAudioResolver.resolveDirectStream("Shape of You - Ed Sheeran")
+        if (resQuery != null) {
+            assertTrue("Stream URL desde query debe ser válida", resQuery.streamUrl.startsWith("http"))
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.boumusic.desktop.sync
 
 import com.boumusic.desktop.data.BackupManager
+import com.boumusic.desktop.downloader.HighFidelityAudioResolver
 import com.boumusic.desktop.model.FtpConfig
 import com.boumusic.desktop.model.Playlist
 import com.sun.net.httpserver.HttpExchange
@@ -155,6 +156,7 @@ class NetworkSyncManager(
 
         httpServer?.createContext("/api/sync", SyncHttpHandler())
         httpServer?.createContext("/api/info", InfoHttpHandler())
+        httpServer?.createContext("/api/download", DownloadHttpHandler())
         httpServer?.executor = Executors.newFixedThreadPool(4)
         try {
             httpServer?.start()
@@ -218,6 +220,83 @@ class NetworkSyncManager(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                try { exchange.sendResponseHeaders(500, -1) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private inner class DownloadHttpHandler : HttpHandler {
+        override fun handle(exchange: HttpExchange) {
+            try {
+                if (!exchange.requestMethod.equals("GET", ignoreCase = true)) {
+                    exchange.sendResponseHeaders(405, -1)
+                    return
+                }
+
+                val queryParam = exchange.requestURI.query?.split("&")
+                    ?.firstOrNull { it.startsWith("query=") }
+                    ?.substringAfter("query=")
+                    ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+
+                if (queryParam.isNullOrBlank()) {
+                    val resp = "{\"error\":\"Missing query parameter\"}".toByteArray(Charsets.UTF_8)
+                    exchange.responseHeaders.set("Content-Type", "application/json")
+                    exchange.sendResponseHeaders(400, resp.size.toLong())
+                    exchange.responseBody.write(resp)
+                    exchange.responseBody.close()
+                    return
+                }
+
+                val resolved = HighFidelityAudioResolver.resolveDirectStream(queryParam)
+                if (resolved == null) {
+                    val resp = "{\"error\":\"Track not found\"}".toByteArray(Charsets.UTF_8)
+                    exchange.responseHeaders.set("Content-Type", "application/json")
+                    exchange.sendResponseHeaders(404, resp.size.toLong())
+                    exchange.responseBody.write(resp)
+                    exchange.responseBody.close()
+                    return
+                }
+
+                val targetUrl = resolved.streamUrl.ifBlank { resolved.fallbackUrl }
+                val streamReq = Request.Builder()
+                    .url(targetUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .build()
+
+                val streamResp = httpClient.newCall(streamReq).execute()
+                if (!streamResp.isSuccessful || streamResp.body == null) {
+                    streamResp.close()
+                    exchange.sendResponseHeaders(502, -1)
+                    return
+                }
+
+                val body = streamResp.body!!
+                val contentLength = body.contentLength()
+                val mimeType = if (resolved.extension == "m4a") "audio/mp4" else "audio/mpeg"
+
+                exchange.responseHeaders.set("Content-Type", mimeType)
+                exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
+                val safeFilename = "${resolved.title} - ${resolved.artist}.${resolved.extension}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                val encodedFilename = java.net.URLEncoder.encode(safeFilename, "UTF-8").replace("+", "%20")
+                exchange.responseHeaders.set("Content-Disposition", "attachment; filename=\"$safeFilename\"; filename*=UTF-8''$encodedFilename")
+
+                if (contentLength > 0) {
+                    exchange.sendResponseHeaders(200, contentLength)
+                } else {
+                    exchange.sendResponseHeaders(200, 0)
+                }
+
+                body.byteStream().use { inp ->
+                    exchange.responseBody.use { outp ->
+                        val buffer = ByteArray(64 * 1024)
+                        var read: Int
+                        while (inp.read(buffer).also { read = it } != -1) {
+                            outp.write(buffer, 0, read)
+                        }
+                    }
+                }
+                streamResp.close()
+            } catch (_: Exception) {
                 try { exchange.sendResponseHeaders(500, -1) } catch (_: Exception) {}
             }
         }

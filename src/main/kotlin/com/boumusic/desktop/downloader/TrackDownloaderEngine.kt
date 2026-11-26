@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
@@ -25,10 +26,15 @@ class TrackDownloaderEngine(
     private val ytdlpName = if (isWindows) "yt-dlp.exe" else "yt-dlp"
     private val ffmpegName = if (isWindows) "ffmpeg.exe" else "ffmpeg"
 
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build()
+
     fun getYtDlpBinary(): File {
         val local = File(binDir, ytdlpName)
         if (local.exists()) return local
-        // Buscar en PATH
         val pathDirs = System.getenv("PATH")?.split(File.pathSeparator) ?: emptyList()
         for (dir in pathDirs) {
             val f = File(dir, ytdlpName)
@@ -57,9 +63,44 @@ class TrackDownloaderEngine(
         task: DownloadTask,
         onUpdate: (DownloadTask) -> Unit
     ): Result<File?> = withContext(Dispatchers.IO) {
+        val track = task.track
+        val sanitizedBaseName = "${track.title} - ${track.artist}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
+
+        onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Buscando mejor fuente de audio..."))
+
+        // =========================================================================
+        // 1. INTENTO DE DESCARGA DIRECTA DE ALTA FIDELIDAD (JioSaavn CDN 320/160kbps)
+        // Rápido, sin dependencias externas de ffmpeg ni bloqueos de Cloudflare.
+        // =========================================================================
+        try {
+            val directStream = HighFidelityAudioResolver.resolveDirectStream(track.artist, track.title)
+            if (directStream != null) {
+                onUpdate(task.copy(stage = DownloadStage.DOWNLOADING, statusMessage = "Descargando stream de alta fidelidad (320kbps)...", progress = 0.05f))
+                val targetExt = if (directStream.streamUrl.endsWith(".mp4") || directStream.streamUrl.endsWith(".m4a")) "m4a" else "mp3"
+                val outFile = File(tempDir, "$sanitizedBaseName.$targetExt")
+
+                val downloaded = downloadHttpStream(directStream.streamUrl, directStream.fallbackUrl, outFile) { progress ->
+                    onUpdate(
+                        task.copy(
+                            stage = DownloadStage.DOWNLOADING,
+                            progress = 0.05f + (progress * 0.90f),
+                            statusMessage = "Descargando: ${(progress * 100).toInt()}%"
+                        )
+                    )
+                }
+
+                if (downloaded && outFile.exists() && outFile.length() > 1024) {
+                    return@withContext finalizeDownload(task, outFile, onUpdate)
+                }
+            }
+        } catch (_: Exception) {}
+
+        // =========================================================================
+        // 2. FALLBACK A MOTOR YT-DLP (YouTube Music / YouTube)
+        // =========================================================================
         var ytdlp = getYtDlpBinary()
         if (!ytdlp.exists()) {
-            onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Descargando motor yt-dlp..."))
+            onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Descargando motor de extracción..."))
             ytdlp = autoDownloadYtDlp() ?: getYtDlpBinary()
             if (!ytdlp.exists()) {
                 val err = "Motor yt-dlp no encontrado en ${ytdlp.absolutePath}"
@@ -69,14 +110,10 @@ class TrackDownloaderEngine(
         }
 
         val ffmpeg = getFfmpegBinary()
-
-        val track = task.track
-        val sanitizedBaseName = "${track.title} - ${track.artist}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
         val outTemplate = "${tempDir.absolutePath}${File.separator}$sanitizedBaseName.%(ext)s"
 
-        onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Buscando mejor fuente de audio..."))
+        onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Localizando stream en YouTube..."))
 
-        // Consulta de búsqueda o enlace directo de YouTube
         val targetQuery = if (track.spotifyUrl.startsWith("http") && (track.spotifyUrl.contains("youtube.com") || track.spotifyUrl.contains("youtu.be"))) {
             track.spotifyUrl
         } else {
@@ -86,16 +123,18 @@ class TrackDownloaderEngine(
         val cmd = mutableListOf(
             ytdlp.absolutePath,
             "--no-playlist",
-            "--extract-audio",
-            "--audio-format", "mp3",
-            "--audio-quality", "0",
             "--add-metadata",
             "--output", outTemplate
         )
 
         if (ffmpeg.exists()) {
+            // Si hay ffmpeg, extraer y convertir a MP3 limpio
+            cmd.addAll(listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "0"))
             cmd.add("--ffmpeg-location")
             cmd.add(ffmpeg.parentFile?.absolutePath ?: ffmpeg.absolutePath)
+        } else {
+            // Si NO hay ffmpeg, descargar stream nativo M4A/AAC sin requerir conversión
+            cmd.addAll(listOf("-f", "ba[ext=m4a]/ba/b"))
         }
 
         cmd.add(targetQuery)
@@ -134,7 +173,8 @@ class TrackDownloaderEngine(
 
             // Buscar el archivo generado en tempDir
             val generatedFile = File(tempDir, "$sanitizedBaseName.mp3").takeIf { it.exists() }
-                ?: tempDir.listFiles()?.firstOrNull { it.name.startsWith(sanitizedBaseName) && it.extension.lowercase() in setOf("mp3", "m4a", "opus") }
+                ?: File(tempDir, "$sanitizedBaseName.m4a").takeIf { it.exists() }
+                ?: tempDir.listFiles()?.firstOrNull { it.name.startsWith(sanitizedBaseName) && it.extension.lowercase() in setOf("mp3", "m4a", "opus", "webm") }
 
             if (generatedFile == null || !generatedFile.exists() || generatedFile.length() < 1024) {
                 val err = "No se generó el archivo de audio"
@@ -142,86 +182,140 @@ class TrackDownloaderEngine(
                 return@withContext Result.failure(Exception(err))
             }
 
-            onUpdate(task.copy(stage = DownloadStage.CONVERTING, progress = 0.96f, statusMessage = "Procesando metadatos..."))
-
-            // 1. Destino LOCAL
-            if (task.destination.type == DestinationType.LOCAL) {
-                val targetDir = task.destination.localFolder ?: repository.defaultMusicDir
-                if (!targetDir.exists()) targetDir.mkdirs()
-                val destFile = File(targetDir, generatedFile.name)
-                generatedFile.copyTo(destFile, overwrite = true)
-                generatedFile.delete()
-
-                // Registrar en la biblioteca local inmediatamente
-                val newSong = Song(
-                    id = destFile.absolutePath.hashCode().toLong(),
-                    title = track.title,
-                    artist = track.artist,
-                    album = track.album.ifBlank { targetDir.name },
-                    duration = if (track.durationMs > 0) track.durationMs else 180000L,
-                    path = destFile.absolutePath,
-                    isRemote = false,
-                    fileSize = destFile.length()
-                )
-
-                val current = repository.loadCachedSongs().toMutableList()
-                current.removeAll { it.path == destFile.absolutePath }
-                current.add(0, newSong)
-                repository.saveCachedSongs(current)
-
-                onUpdate(
-                    task.copy(
-                        stage = DownloadStage.COMPLETED,
-                        progress = 1.0f,
-                        statusMessage = "Guardado en biblioteca local",
-                        outputFile = destFile
-                    )
-                )
-                return@withContext Result.success(destFile)
-            }
-
-            // 2. Destino REMOTO (SMB, FTP o WebDAV)
-            val serverConfig = task.destination.serverConfig
-            if (serverConfig == null) {
-                val err = "Servidor remoto no configurado"
-                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
-                return@withContext Result.failure(Exception(err))
-            }
-
-            onUpdate(task.copy(stage = DownloadStage.UPLOADING, progress = 0.97f, statusMessage = "Subiendo a ${serverConfig.name}..."))
-
-            val remoteDir = task.destination.remoteSubPath.ifBlank { "/" }
-            val uploadRes = if (serverConfig.isSmb) {
-                smbManager.uploadFile(serverConfig, remoteDir, generatedFile) { p ->
-                    onUpdate(task.copy(stage = DownloadStage.UPLOADING, progress = 0.97f + (p * 0.03f), statusMessage = "Subiendo a SMB: ${(p * 100).toInt()}%"))
-                }
-            } else {
-                ftpManager.uploadSong(serverConfig, remoteDir, generatedFile) { p ->
-                    onUpdate(task.copy(stage = DownloadStage.UPLOADING, progress = 0.97f + (p * 0.03f), statusMessage = "Subiendo a FTP: ${(p * 100).toInt()}%"))
-                }
-            }
-
-            generatedFile.delete()
-
-            if (uploadRes.isSuccess) {
-                onUpdate(
-                    task.copy(
-                        stage = DownloadStage.COMPLETED,
-                        progress = 1.0f,
-                        statusMessage = "Subido con éxito a ${serverConfig.name} ($remoteDir)"
-                    )
-                )
-                return@withContext Result.success(null)
-            } else {
-                val err = "Error al subir a servidor: ${uploadRes.exceptionOrNull()?.message}"
-                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
-                return@withContext Result.failure(Exception(err))
-            }
+            return@withContext finalizeDownload(task, generatedFile, onUpdate)
         } catch (t: Throwable) {
             val err = "Excepción en descarga: ${t.message}"
             onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
             return@withContext Result.failure(t)
         }
+    }
+
+    private suspend fun finalizeDownload(
+        task: DownloadTask,
+        generatedFile: File,
+        onUpdate: (DownloadTask) -> Unit
+    ): Result<File?> = withContext(Dispatchers.IO) {
+        val track = task.track
+        onUpdate(task.copy(stage = DownloadStage.CONVERTING, progress = 0.96f, statusMessage = "Procesando metadatos..."))
+
+        // 1. Destino LOCAL
+        if (task.destination.type == DestinationType.LOCAL) {
+            val targetDir = task.destination.localFolder ?: repository.defaultMusicDir
+            if (!targetDir.exists()) targetDir.mkdirs()
+            val destFile = File(targetDir, generatedFile.name)
+
+            if (destFile.canonicalPath != generatedFile.canonicalPath) {
+                generatedFile.copyTo(destFile, overwrite = true)
+                generatedFile.delete()
+            }
+
+            val newSong = Song(
+                id = destFile.absolutePath.hashCode().toLong(),
+                title = track.title,
+                artist = track.artist,
+                album = track.album.ifBlank { targetDir.name },
+                duration = if (track.durationMs > 0) track.durationMs else 180000L,
+                path = destFile.absolutePath,
+                isRemote = false,
+                fileSize = destFile.length()
+            )
+
+            val current = repository.loadCachedSongs().toMutableList()
+            current.removeAll { it.path == destFile.absolutePath }
+            current.add(0, newSong)
+            repository.saveCachedSongs(current)
+
+            onUpdate(
+                task.copy(
+                    stage = DownloadStage.COMPLETED,
+                    progress = 1.0f,
+                    statusMessage = "Guardado en biblioteca local",
+                    outputFile = destFile
+                )
+            )
+            return@withContext Result.success(destFile)
+        }
+
+        // 2. Destino REMOTO (SMB, FTP o WebDAV)
+        val serverConfig = task.destination.serverConfig
+        if (serverConfig == null) {
+            val err = "Servidor remoto no configurado"
+            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+            return@withContext Result.failure(Exception(err))
+        }
+
+        onUpdate(task.copy(stage = DownloadStage.UPLOADING, progress = 0.97f, statusMessage = "Subiendo a ${serverConfig.name}..."))
+
+        val remoteDir = task.destination.remoteSubPath.ifBlank { "/" }
+        val uploadRes = if (serverConfig.isSmb) {
+            smbManager.uploadFile(serverConfig, remoteDir, generatedFile) { p ->
+                onUpdate(task.copy(stage = DownloadStage.UPLOADING, progress = 0.97f + (p * 0.03f), statusMessage = "Subiendo a SMB: ${(p * 100).toInt()}%"))
+            }
+        } else {
+            ftpManager.uploadSong(serverConfig, remoteDir, generatedFile) { p ->
+                onUpdate(task.copy(stage = DownloadStage.UPLOADING, progress = 0.97f + (p * 0.03f), statusMessage = "Subiendo a FTP: ${(p * 100).toInt()}%"))
+            }
+        }
+
+        generatedFile.delete()
+
+        if (uploadRes.isSuccess) {
+            onUpdate(
+                task.copy(
+                    stage = DownloadStage.COMPLETED,
+                    progress = 1.0f,
+                    statusMessage = "Subido con éxito a ${serverConfig.name} ($remoteDir)"
+                )
+            )
+            return@withContext Result.success(null)
+        } else {
+            val err = "Error al subir a servidor: ${uploadRes.exceptionOrNull()?.message}"
+            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+            return@withContext Result.failure(Exception(err))
+        }
+    }
+
+    private fun downloadHttpStream(
+        primaryUrl: String,
+        fallbackUrl: String,
+        destFile: File,
+        onProgress: (Float) -> Unit
+    ): Boolean {
+        val urls = listOf(primaryUrl, fallbackUrl).distinct()
+        for (u in urls) {
+            try {
+                val req = Request.Builder()
+                    .url(u)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .build()
+                val resp = httpClient.newCall(req).execute()
+                if (resp.isSuccessful && resp.body != null) {
+                    val body = resp.body!!
+                    val total = body.contentLength()
+                    val inStream = body.byteStream()
+                    val outStream = FileOutputStream(destFile)
+                    inStream.use { inp ->
+                        outStream.use { outp ->
+                            val buf = ByteArray(32 * 1024)
+                            var read: Int
+                            var written = 0L
+                            while (inp.read(buf).also { read = it } != -1) {
+                                outp.write(buf, 0, read)
+                                written += read
+                                if (total > 0) {
+                                    onProgress(written.toFloat() / total)
+                                }
+                            }
+                        }
+                    }
+                    resp.close()
+                    if (destFile.exists() && destFile.length() > 1024) return true
+                } else {
+                    resp.close()
+                }
+            } catch (_: Exception) {}
+        }
+        return false
     }
 
     private fun autoDownloadYtDlp(): File? {
@@ -232,12 +326,7 @@ class TrackDownloaderEngine(
                 "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
             }
             val req = Request.Builder().url(downloadUrl).build()
-            val client = OkHttpClient.Builder()
-                .followRedirects(true)
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(60, TimeUnit.SECONDS)
-                .build()
-            val resp = client.newCall(req).execute()
+            val resp = httpClient.newCall(req).execute()
             if (resp.isSuccessful && resp.body != null) {
                 val target = File(binDir, ytdlpName)
                 target.parentFile?.mkdirs()
@@ -248,6 +337,11 @@ class TrackDownloaderEngine(
                 }
                 resp.close()
                 target.setExecutable(true)
+                if (!isWindows) {
+                    try {
+                        Runtime.getRuntime().exec(arrayOf("chmod", "+x", target.absolutePath)).waitFor()
+                    } catch (_: Exception) {}
+                }
                 return target
             }
             resp.close()

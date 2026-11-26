@@ -1,3 +1,5 @@
-e44411abcf2ba41654744ed64aad5580cb67260e31a5ff8ad8e49f4f3d1127a2  Boumusic-2.1.0-Setup.exe
-a1b467d8107fc25da7eeb25727526f97ac8dc0b4e4d635ef1dc2e0560718c050  Boumusic-Desktop-v2.1.0-windows-x64.zip
+﻿5fedf47b2e0e1ee7583d453670a6a20a66509bf310b80c167b91c934fbd94aa5  Boumusic-2.1.0-Setup.exe
+3ce1aab1225205df57800f4a9a1f567ba47f95b3b173b8344b4ab0aea68521c8  Boumusic-Desktop-v2.1.0-windows-x64.zip
+1a1613673c2b7dd7886dd1292a4077a420821574d429352749851b74baf1d8be  Boumusic-2.1.0-x86_64.AppImage
+a462f78b5ecb85fdce35d835dce0b5513cf4c338447a1d453ef9fa6978f6dc2d  Boumusic-2.1.0-linux-x64.tar.gz
 2462f564f6f645c2e5591e8142f0d7bb254b26e7a14dfc07b1c80aa3ed05ec50  Boumusic-Linux-x64-v2.1.0.zip
