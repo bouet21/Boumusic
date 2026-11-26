@@ -328,4 +328,17 @@ class DesktopMusicTest {
             assertTrue("Debe encontrar canciones al buscar texto", results.isNotEmpty())
         }
     }
+
+    @Test
+    fun testCredentialCipher() {
+        val original = "MiSuperPassword123!@#"
+        val encrypted = com.boumusic.desktop.data.CredentialCipher.encrypt(original)
+        assertTrue("El texto cifrado debe empezar con el prefijo seguro", encrypted.startsWith("enc:v1:"))
+        assertFalse("El texto cifrado no debe contener la contraseña plana", encrypted.contains(original))
+
+        val decrypted = com.boumusic.desktop.data.CredentialCipher.decrypt(encrypted)
+        assertEquals("El descifrado debe recuperar exactamente la contraseña original", original, decrypted)
+
+        assertEquals("Texto sin prefijo debe devolverse idéntico", "plainPassword", com.boumusic.desktop.data.CredentialCipher.decrypt("plainPassword"))
+    }
 }

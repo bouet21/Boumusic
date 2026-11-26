@@ -1,0 +1,29 @@
+name: Solicitud de Función (Feature Request)
+description: Sugiere una nueva funcionalidad o mejora para Boumusic Desktop
+title: "[FEAT] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: ¡Agradecemos tus sugerencias para hacer que Boumusic sea aún mejor!
+  - type: textarea
+    id: problem
+    attributes:
+      label: ¿Qué problema o limitación resuelve esta función?
+      description: Explica brevemente el contexto o la necesidad.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Descripción de la solución propuesta
+      description: Explica detalladamente cómo te gustaría que funcionase.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: ¿Has probado alguna otra solución o reproductor que implemente esto?
+    validations:
+      required: false

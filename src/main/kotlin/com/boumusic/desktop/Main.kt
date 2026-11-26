@@ -14,8 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.isTraySupported
 import androidx.compose.ui.window.rememberWindowState
 import com.boumusic.desktop.ui.components.AddToPlaylistDialog
 import com.boumusic.desktop.ui.components.PlayerBar
@@ -77,6 +79,34 @@ fun main() {
         } catch (_: Throwable) {
             null
         }
+    }
+
+    if (appIcon != null && isTraySupported) {
+        val currentTrack = currentSong?.let { "${it.title} - ${it.artist}" } ?: "Boumusic Desktop"
+        val isPlaying by viewModel.player.isPlaying.collectAsState()
+        Tray(
+            icon = appIcon,
+            tooltip = currentTrack,
+            menu = {
+                Item(
+                    text = if (isPlaying) "Pausar" else "Reproducir",
+                    onClick = { viewModel.player.togglePlayPause() }
+                )
+                Item(
+                    text = "Siguiente",
+                    onClick = { viewModel.playNext() }
+                )
+                Item(
+                    text = "Anterior",
+                    onClick = { viewModel.playPrevious() }
+                )
+                Separator()
+                Item(
+                    text = "Salir",
+                    onClick = ::exitApplication
+                )
+            }
+        )
     }
 
     Window(

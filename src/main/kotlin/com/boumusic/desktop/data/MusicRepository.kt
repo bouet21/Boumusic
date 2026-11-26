@@ -163,7 +163,7 @@ class MusicRepository {
                         host = o.optString("host", ""),
                         port = o.optInt("port", 21),
                         username = o.optString("username", "anonymous"),
-                        password = o.optString("password", ""),
+                        password = CredentialCipher.decrypt(o.optString("password", "")),
                         isFtps = o.optBoolean("isFtps", false),
                         isWebDav = o.optBoolean("isWebDav", false),
                         webDavPath = o.optString("webDavPath", "/"),
@@ -189,7 +189,7 @@ class MusicRepository {
                 o.put("host", c.host)
                 o.put("port", c.port)
                 o.put("username", c.username)
-                o.put("password", c.password)
+                o.put("password", CredentialCipher.encrypt(c.password))
                 o.put("isFtps", c.isFtps)
                 o.put("isWebDav", c.isWebDav)
                 o.put("webDavPath", c.webDavPath)
