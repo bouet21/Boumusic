@@ -104,7 +104,7 @@ class TrackDownloaderEngine(
             ytdlp = autoDownloadYtDlp() ?: getYtDlpBinary()
             if (!ytdlp.exists()) {
                 val err = "Motor yt-dlp no encontrado en ${ytdlp.absolutePath}"
-                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err, statusMessage = err))
                 return@withContext Result.failure(Exception(err))
             }
         }
@@ -114,10 +114,15 @@ class TrackDownloaderEngine(
 
         onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Localizando stream en YouTube..."))
 
+        val cleanArtist = java.text.Normalizer.normalize(track.artist, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+        val cleanTitle = java.text.Normalizer.normalize(track.title, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+
         val targetQuery = if (track.spotifyUrl.startsWith("http") && (track.spotifyUrl.contains("youtube.com") || track.spotifyUrl.contains("youtu.be"))) {
             track.spotifyUrl
         } else {
-            "ytsearch1:${track.artist} - ${track.title} audio"
+            "ytsearch1:$cleanArtist - $cleanTitle audio"
         }
 
         val cmd = mutableListOf(
@@ -167,7 +172,7 @@ class TrackDownloaderEngine(
             val exitCode = proc.waitFor()
             if (exitCode != 0) {
                 val err = "Error en el extractor de audio (código $exitCode)"
-                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err, statusMessage = err))
                 return@withContext Result.failure(Exception(err))
             }
 
@@ -178,14 +183,14 @@ class TrackDownloaderEngine(
 
             if (generatedFile == null || !generatedFile.exists() || generatedFile.length() < 1024) {
                 val err = "No se generó el archivo de audio"
-                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+                onUpdate(task.copy(stage = DownloadStage.ERROR, error = err, statusMessage = err))
                 return@withContext Result.failure(Exception(err))
             }
 
             return@withContext finalizeDownload(task, generatedFile, onUpdate)
         } catch (t: Throwable) {
             val err = "Excepción en descarga: ${t.message}"
-            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err, statusMessage = err))
             return@withContext Result.failure(t)
         }
     }
@@ -240,7 +245,7 @@ class TrackDownloaderEngine(
         val serverConfig = task.destination.serverConfig
         if (serverConfig == null) {
             val err = "Servidor remoto no configurado"
-            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err, statusMessage = err))
             return@withContext Result.failure(Exception(err))
         }
 
@@ -270,7 +275,7 @@ class TrackDownloaderEngine(
             return@withContext Result.success(null)
         } else {
             val err = "Error al subir a servidor: ${uploadRes.exceptionOrNull()?.message}"
-            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err))
+            onUpdate(task.copy(stage = DownloadStage.ERROR, error = err, statusMessage = err))
             return@withContext Result.failure(Exception(err))
         }
     }

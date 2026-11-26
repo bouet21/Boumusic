@@ -678,8 +678,13 @@ private fun DownloadTaskCard(
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val displayMessage = when {
+                        isError -> task.error?.takeIf { it.isNotBlank() } ?: task.statusMessage.ifBlank { "Error en la descarga" }
+                        isCompleted -> task.statusMessage.ifBlank { task.stage.label }
+                        else -> task.statusMessage.ifBlank { task.stage.label }
+                    }
                     Text(
-                        text = task.statusMessage.ifBlank { task.stage.label },
+                        text = displayMessage,
                         color = if (isError) Color(0xFFFF8A80) else if (isCompleted) Color(0xFF81C784) else NeonCyan,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
