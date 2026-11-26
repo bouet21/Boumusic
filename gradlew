@@ -28,4 +28,4 @@ if [ -n "$JAVA_HOME" ] ; then
 fi
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
-exec "$JAVACMD" -jar "$CLASSPATH" "$@"
+exec "$JAVACMD" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
