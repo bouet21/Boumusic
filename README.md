@@ -96,6 +96,8 @@ Para verificar que tus archivos descargados son auténticos y no han sufrido alt
 ```text
 e44411abcf2ba41654744ed64aad5580cb67260e31a5ff8ad8e49f4f3d1127a2  Boumusic-2.1.0-Setup.exe
 a1b467d8107fc25da7eeb25727526f97ac8dc0b4e4d635ef1dc2e0560718c050  Boumusic-Desktop-v2.1.0-windows-x64.zip
+7f2e56e1fa705b071fa061d58dd3eae4497d2dbeef713b23329ea9bbff034678  Boumusic-2.1.0-x86_64.AppImage
+1e092618cc3146a4699bba10bf8f5fa64f06aabfc7f33a58413aefd7fc710ba2  Boumusic-2.1.0-linux-x64.tar.gz
 2462f564f6f645c2e5591e8142f0d7bb254b26e7a14dfc07b1c80aa3ed05ec50  Boumusic-Linux-x64-v2.1.0.zip
 ```
 
