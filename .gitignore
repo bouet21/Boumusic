@@ -9,6 +9,7 @@ Thumbs.db
 *.exe
 *.msi
 dist-linux/
+dist*/
 release/
 Boumusic-Windows-*/
 Boumusic-Linux-*/

@@ -5,6 +5,30 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [2.1.0] - 2026-11-26
+
+### Añadido
+- **Soporte Oficial para Subsonic, Navidrome y Jellyfin**:
+  - Implementación completa del cliente REST API Subsonic v1.16.1 con autenticación segura token + salt MD5.
+  * Navegación por artistas, álbumes, carpetas de música, álbumes recientes y canciones aleatorias.
+  * Streaming continuo y descarga directa a disco o servidores con un solo clic.
+  * Diálogo de configuración con chip dedicado para Subsonic y puerto por defecto 4533.
+- **Integración Nativa con el Sistema Operativo**:
+  - Teclas multimedia globales (`Play/Pause`, `Next`, `Previous`, `Stop`) a nivel de Windows y Linux usando JNA con bucle de mensajes en hilo demonio desacoplado. Funciona incluso con la app minimizada o sin foco.
+  - Integración en la Bandeja del Sistema (System Tray) con tooltip dinámico de pista/artista y menú contextual rápido.
+  - Barra de título nativa oscura (DWM) en Windows 11 y 10.
+- **Audio de Alta Fidelidad (Gapless Playback y ReplayGain)**:
+  - **Gapless Playback real**: transición de 0 milisegundos entre pistas consecutivas manteniendo el DAC y la línea de audio PCM activa sin cortes ni desinicialización de hardware.
+  - **Normalización ReplayGain / EBU R128**: lectura de metadatos `REPLAYGAIN_TRACK_GAIN` y escalado acústico automático con limitador suave anti-clipping en tiempo real.
+  - Conmutadores dedicados en la pantalla de ecualizador para activar o desactivar Gapless y ReplayGain.
+- **Empaquetado Autónomo para Linux**:
+  - Scripts `build-linux-appimage.sh` y `build-linux-tarball.sh` que generan paquetes con JRE embebido, listos para ejecutar en cualquier distribución sin requerir Java instalado.
+  - Archivo de escritorio `boumusic.desktop` con tipos MIME de audio.
+- **Material Visual y Documentación**:
+  - 5 capturas vectoriales de alta definición en `docs/screenshots/` y diagrama de flujo de arquitectura Mermaid en el README.
+
+---
+
 ## [2.0.1] - 2026-11-25
 
 ### Añadido

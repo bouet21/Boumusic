@@ -1,6 +1,6 @@
 # 🖥️ Boumusic Desktop — Reproductor de Música Moderno y Ligero (Windows & Linux)
 
-[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v2.0.1)](https://github.com/bouet21/Boumusic-Desktop/releases)
+[![Release](https://img.shields.io/github/v/release/bouet21/Boumusic-Desktop?color=00F5D4&label=Versi%C3%B3n%20Oficial%20v2.1.0)](https://github.com/bouet21/Boumusic-Desktop/releases)
 [![Platform](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux-7B2CBF)](#)
 [![Compose Desktop](https://img.shields.io/badge/Compose%20Multiplatform-1.6.11-brightgreen)](https://www.jetbrains.com/lp/compose-multiplatform/)
 [![Audio](https://img.shields.io/badge/Audio-Gapless%20%7C%20ReplayGain%20%7C%20Biquad%20EQ-00F5D4)](#)
@@ -77,15 +77,15 @@ A diferencia de los reproductores modernos construidos sobre Electron o navegado
 
 ---
 
-## 📲 Descarga Directa (v2.0.1)
+## 📲 Descarga Directa (v2.1.0)
 
 | Sistema | Paquete | Enlace de Descarga |
 | :--- | :--- | :--- |
-| **Windows x64** 🪟 | **Instalador Guiado (Setup EXE)** | 👉 **[Descargar Boumusic-2.0.1-Setup.exe](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-2.0.1-Setup.exe)** |
-| **Windows x64** 🪟 | **Portable (ZIP)** | 👉 **[Descargar Boumusic-Desktop-v2.0.1-windows-x64.zip](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-Desktop-v2.0.1-windows-x64.zip)** |
-| **Linux x64** 🐧 | **AppImage Autónomo (Sin requerir Java)** | 👉 **[Descargar Boumusic-2.0.1-x86_64.AppImage](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-2.0.1-x86_64.AppImage)** |
-| **Linux x64** 🐧 | **Paquete Portable (Tarball + JRE embebido)** | 👉 **[Descargar Boumusic-2.0.1-linux-x64.tar.gz](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-2.0.1-linux-x64.tar.gz)** |
-| **Linux x64** 🐧 | **Paquete Lanzador (Script + JAR)** | 👉 **[Descargar Boumusic-Linux-x64-v2.0.1.zip](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.0.1/Boumusic-Linux-x64-v2.0.1.zip)** |
+| **Windows x64** 🪟 | **Instalador Guiado (Setup EXE)** | 👉 **[Descargar Boumusic-2.1.0-Setup.exe](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.1.0/Boumusic-2.1.0-Setup.exe)** |
+| **Windows x64** 🪟 | **Portable (ZIP)** | 👉 **[Descargar Boumusic-Desktop-v2.1.0-windows-x64.zip](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.1.0/Boumusic-Desktop-v2.1.0-windows-x64.zip)** |
+| **Linux x64** 🐧 | **AppImage Autónomo (Sin requerir Java)** | 👉 **[Descargar Boumusic-2.1.0-x86_64.AppImage](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.1.0/Boumusic-2.1.0-x86_64.AppImage)** |
+| **Linux x64** 🐧 | **Paquete Portable (Tarball + JRE embebido)** | 👉 **[Descargar Boumusic-2.1.0-linux-x64.tar.gz](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.1.0/Boumusic-2.1.0-linux-x64.tar.gz)** |
+| **Linux x64** 🐧 | **Paquete Lanzador (Script + JAR)** | 👉 **[Descargar Boumusic-Linux-x64-v2.1.0.zip](https://github.com/bouet21/Boumusic-Desktop/releases/download/v2.1.0/Boumusic-Linux-x64-v2.1.0.zip)** |
 
 *(Consulta todas las versiones anteriores en la sección de [Releases de GitHub](https://github.com/bouet21/Boumusic-Desktop/releases) o revisa el historial detallado en [CHANGELOG.md](CHANGELOG.md)).*
 
@@ -94,9 +94,9 @@ A diferencia de los reproductores modernos construidos sobre Electron o navegado
 Para verificar que tus archivos descargados son auténticos y no han sufrido alteraciones:
 
 ```text
-d9fdd87d08597961e12c438b8d1914c90ff27a1b7a18b11404d34d5d90b33f84  Boumusic-2.0.1-Setup.exe
-03a6aeb94e59fe4ed1677445dd17710c9c24e709d807c1d61d9b3bfac323f3b8  Boumusic-Desktop-v2.0.1-windows-x64.zip
-8efbc0d1bf9387f314eb3d00dc5850bcb7e4263aec003ed5586225854dce9a7d  Boumusic-Linux-x64-v2.0.1.zip
+e44411abcf2ba41654744ed64aad5580cb67260e31a5ff8ad8e49f4f3d1127a2  Boumusic-2.1.0-Setup.exe
+a1b467d8107fc25da7eeb25727526f97ac8dc0b4e4d635ef1dc2e0560718c050  Boumusic-Desktop-v2.1.0-windows-x64.zip
+2462f564f6f645c2e5591e8142f0d7bb254b26e7a14dfc07b1c80aa3ed05ec50  Boumusic-Linux-x64-v2.1.0.zip
 ```
 
 ---
