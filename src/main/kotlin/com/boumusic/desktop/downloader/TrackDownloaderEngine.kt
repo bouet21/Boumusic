@@ -112,6 +112,15 @@ class TrackDownloaderEngine(
         val ffmpeg = getFfmpegBinary()
         val outTemplate = "${tempDir.absolutePath}${File.separator}$sanitizedBaseName.%(ext)s"
 
+        // Limpiar archivos temporales previos o parciales que puedan bloquear la descarga
+        try {
+            tempDir.listFiles()?.forEach { f ->
+                if (f.name.startsWith(sanitizedBaseName)) {
+                    f.delete()
+                }
+            }
+        } catch (_: Exception) {}
+
         onUpdate(task.copy(stage = DownloadStage.SEARCHING_STREAM, statusMessage = "Localizando stream en YouTube..."))
 
         val cleanArtist = java.text.Normalizer.normalize(track.artist, java.text.Normalizer.Form.NFD)
@@ -129,6 +138,10 @@ class TrackDownloaderEngine(
             ytdlp.absolutePath,
             "--no-playlist",
             "--add-metadata",
+            "--force-overwrites",
+            "--no-continue",
+            "--no-cache-dir",
+            "--extractor-args", "youtube:player_client=android,web",
             "--output", outTemplate
         )
 
@@ -151,10 +164,14 @@ class TrackDownloaderEngine(
 
             onUpdate(task.copy(stage = DownloadStage.DOWNLOADING, statusMessage = "Descargando stream de audio..."))
 
-            val reader = proc.inputStream.bufferedReader()
+            val outputBuffer = ArrayDeque<String>(35)
+            val reader = proc.inputStream.bufferedReader(Charsets.UTF_8)
             var line: String?
             while (reader.readLine().also { line = it } != null) {
                 val l = line ?: break
+                if (outputBuffer.size >= 35) outputBuffer.removeFirst()
+                outputBuffer.addLast(l)
+
                 val m = progressPattern.matcher(l)
                 if (m.find()) {
                     val pct = m.group(1).toFloatOrNull() ?: 0f
@@ -171,7 +188,10 @@ class TrackDownloaderEngine(
 
             val exitCode = proc.waitFor()
             if (exitCode != 0) {
-                val err = "Error en el extractor de audio (código $exitCode)"
+                val errorDetail = outputBuffer.findLast { it.contains("ERROR:", ignoreCase = true) }
+                    ?: outputBuffer.lastOrNull { it.isNotBlank() }
+                    ?: "código $exitCode"
+                val err = "Error en extractor de audio: $errorDetail"
                 onUpdate(task.copy(stage = DownloadStage.ERROR, error = err, statusMessage = err))
                 return@withContext Result.failure(Exception(err))
             }

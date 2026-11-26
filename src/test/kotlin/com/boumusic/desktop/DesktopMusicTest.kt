@@ -355,6 +355,37 @@ class DesktopMusicTest {
     }
 
     @Test
+    fun testDepresionSonoraDownload() {
+        val repo = com.boumusic.desktop.data.MusicRepository()
+        val ftp = com.boumusic.desktop.ftp.FtpManager()
+        val engine = com.boumusic.desktop.downloader.TrackDownloaderEngine(repo, ftp, ftp.smbManager)
+        val track = com.boumusic.desktop.downloader.DownloadTrackItem(
+            id = "test-depresion",
+            title = "Como todo el Mundo",
+            artist = "Depresión Sonora",
+            album = "Como todo el Mundo",
+            durationMs = 195000L,
+            spotifyUrl = "https://www.deezer.com/track/1988475607"
+        )
+        val task = com.boumusic.desktop.downloader.DownloadTask(
+            id = "task-depresion",
+            track = track,
+            destination = com.boumusic.desktop.downloader.DownloadDestination(
+                type = com.boumusic.desktop.downloader.DestinationType.LOCAL,
+                label = "Local",
+                localFolder = engine.tempDir
+            )
+        )
+        kotlinx.coroutines.runBlocking {
+            val res = engine.executeDownload(task) { updated ->
+                println("UPDATE DEPRESION: stage=${updated.stage}, progress=${updated.progress}, status=${updated.statusMessage}, error=${updated.error}")
+            }
+            println("FINAL RESULT DEPRESION: $res")
+            assertTrue("La descarga debe ser exitosa", res.isSuccess)
+        }
+    }
+
+    @Test
     fun testSearchResolverTextQuery() {
         try {
             kotlinx.coroutines.runBlocking {
