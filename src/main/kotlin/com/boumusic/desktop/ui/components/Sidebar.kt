@@ -91,8 +91,9 @@ fun Sidebar(
                     ),
                     color = TextPrimary
                 )
+                val platformLabel = if (System.getProperty("os.name", "").lowercase().contains("linux")) "Linux Desktop" else "PC Desktop"
                 Text(
-                    text = "PC Desktop v2.0.0",
+                    text = "$platformLabel v2.1.0",
                     fontSize = 10.sp,
                     color = NeonCyan,
                     fontWeight = FontWeight.SemiBold
